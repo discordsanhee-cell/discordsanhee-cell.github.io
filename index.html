@@ -3,173 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📱 실시간 스마트폰 카메라&마이크 연동 (WebRTC)</title>
-    <!-- WebRTC 연결을 쉽게 해주는 PeerJS 라이브러리 로드 -->
+    <title>🎥 완벽 연동 스마트폰 웹캠 (PC 장치 불필요)</title>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: #1e1e24;
-            color: #fff;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .container {
-            background: #2a2a35;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-            width: 100%;
-            max-width: 600px;
-            text-align: center;
-        }
-        h2 { margin-top: 0; color: #4dadff; }
-        .mode-selection {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        button {
-            flex: 1;
-            padding: 15px;
-            font-size: 16px;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-phone { background-color: #e84118; color: white; }
-        .btn-pc { background-color: #00a8ff; color: white; }
-        .btn-connect { background-color: #4cd137; color: white; margin-top: 10px; width: 100%; }
-        button:hover { opacity: 0.9; transform: scale(0.98); }
-        
-        .area { display: none; margin-top: 20px; background: #13131a; padding: 20px; border-radius: 12px; }
-        video { width: 100%; max-width: 100%; border-radius: 8px; background: #000; }
-        
-        input {
-            width: calc(100% - 24px);
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #555;
-            background: #222;
-            color: white;
-            font-size: 16px;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-        .status-msg { color: #fbc531; margin-top: 10px; font-weight: bold; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .container { background: #2d2d2d; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 500px; text-align: center; }
+        h2 { color: #00d2ff; margin-top: 0; }
+        .btn-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        button { flex: 1; padding: 15px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; }
+        .btn-phone { background: #ff4757; }
+        .btn-pc { background: #1e90ff; }
+        .btn-action { background: #2ed573; width: 100%; margin-top: 10px; }
+        .section { display: none; background: #222; padding: 20px; border-radius: 10px; }
+        input { width: calc(100% - 24px); padding: 12px; margin-bottom: 15px; border-radius: 6px; border: 1px solid #555; background: #111; color: white; text-align: center; font-size: 18px; font-weight: bold; }
+        video { width: 100%; border-radius: 8px; background: black; margin-top: 15px; }
+        .log { color: #ffa502; font-weight: bold; margin: 10px 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🎥 모바일 카메라/마이크 -> PC 실시간 연동</h2>
-    <p>현재 기기가 무엇인지 선택해 주세요.</p>
+    <h2>📱 스마트폰 ➡️ PC 실시간 전송</h2>
     
-    <div class="mode-selection">
-        <button class="btn-phone" onclick="showPhoneArea()">📱 스마트폰 (카메라/마이크 송신)</button>
-        <button class="btn-pc" onclick="showPCArea()">💻 컴퓨터 (화면/소리 수신)</button>
+    <div id="select-mode" class="btn-box">
+        <button class="btn-phone" onclick="showSection('phone')">📱 스마트폰<br>(카메라 켜기)</button>
+        <button class="btn-pc" onclick="showSection('pc')">💻 컴퓨터<br>(화면 보기)</button>
     </div>
 
-    <!-- 1. 스마트폰 전용 영역 -->
-    <div id="phone-area" class="area">
-        <h3>스마트폰 방송 설정</h3>
-        <input type="text" id="my-custom-id" placeholder="사용할 짧은 방 번호 입력 (예: 1234)">
-        <button class="btn-phone" onclick="initPhone()">📡 방송 시작하기</button>
-        <div id="phone-status" class="status-msg"></div>
-        <video id="local-video" autoplay playsinline muted style="margin-top: 15px; transform: scaleX(-1);"></video>
+    <!-- 스마트폰 송신 영역 -->
+    <div id="phone-section" class="section">
+        <h3>스마트폰 방 만들기</h3>
+        <input type="text" id="room-id" placeholder="원하는 방 번호 (예: 777)">
+        <button class="btn-action" onclick="startBroadcast()">방송 시작</button>
+        <div id="phone-log" class="log"></div>
+        <video id="local-video" autoplay playsinline muted></video>
     </div>
 
-    <!-- 2. 컴퓨터 전용 영역 -->
-    <div id="pc-area" class="area">
-        <h3>컴퓨터 수신 대기</h3>
-        <p>스마트폰에서 설정한 방 번호를 입력하세요:</p>
-        <input type="text" id="target-id" placeholder="방 번호 입력 (예: 1234)">
-        <button class="btn-connect" onclick="connectToPhone()">🔒 카메라/마이크 연결하기</button>
-        <!-- 컴퓨터 쪽 비디오는 마이크 소리도 나도록 muted를 빼고 재생합니다 -->
-        <video id="remote-video" autoplay playsinline style="margin-top: 15px;"></video>
+    <!-- 컴퓨터 수신 영역 -->
+    <div id="pc-section" class="section">
+        <h3>컴퓨터 수신하기</h3>
+        <input type="text" id="target-id" placeholder="스마트폰 방 번호 입력">
+        <button class="btn-action" onclick="connectToPhone()">화면 연결</button>
+        <div id="pc-log" class="log"></div>
+        <video id="remote-video" autoplay playsinline controls></video>
     </div>
 </div>
 
 <script>
     let peer;
-    let localStream;
 
-    function showPhoneArea() {
-        document.getElementById('phone-area').style.display = 'block';
-        document.getElementById('pc-area').style.display = 'none';
+    function showSection(type) {
+        document.getElementById('select-mode').style.display = 'none';
+        if (type === 'phone') document.getElementById('phone-section').style.display = 'block';
+        if (type === 'pc') document.getElementById('pc-section').style.display = 'block';
     }
 
-    function showPCArea() {
-        document.getElementById('pc-area').style.display = 'block';
-        document.getElementById('phone-area').style.display = 'none';
-        peer = new Peer(); // 컴퓨터는 자동 랜덤 ID 생성해도 무관
-    }
+    // 📱 [스마트폰] 방송 시작
+    function startBroadcast() {
+        const roomId = document.getElementById('room-id').value.trim();
+        if (!roomId) return alert("방 번호를 입력하세요!");
 
-    // 📱 스마트폰에서 방송 시작 버튼 눌렀을 때
-    function initPhone() {
-        const customId = document.getElementById('my-custom-id').value.trim();
-        if (!customId) {
-            alert("원하는 방 번호(숫자나 문자)를 입력해 주세요!");
-            return;
-        }
+        peer = new Peer(roomId);
 
-        // 💡 사용자가 입력한 짧은 ID로 Peer 서버 연결 생성
-        peer = new Peer(customId);
-
-        peer.on('open', (id) => {
-            document.getElementById('phone-status').innerText = `상태: [ ${id} ] 번방으로 방송 중!`;
+        peer.on('open', () => {
+            document.getElementById('phone-log').innerText = `✅ [${roomId}]번 방이 열렸습니다.`;
         });
 
-        peer.on('error', (err) => {
-            if (err.type === 'unavailable-id') {
-                alert("이미 다른 사람이 사용 중인 번호입니다. 다른 번호를 입력해 주세요.");
-            } else {
-                alert("오류 발생: " + err.type);
-            }
-        });
+        peer.on('error', (err) => alert("오류: " + err.type));
 
-        // 💡 video: true와 함께 audio: true를 주어 마이크 권한도 함께 땁니다.
         navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" }, // 후면 카메라
-            audio: true // 마이크 켜기!
+            video: { facingMode: "environment" }, 
+            audio: true 
         }).then(stream => {
-            localStream = stream;
             document.getElementById('local-video').srcObject = stream;
-
-            // 컴퓨터가 전화를 걸어오면 내 카메라+마이크 스트림을 넘겨줌
-            peer.on('call', (call) => {
-                call.answer(localStream);
-            });
-        }).catch(err => {
-            alert("카메라 및 마이크 권한을 허용해야 합니다: " + err);
-        });
+            // PC가 전화를 걸어오면 화면/소리 전달
+            peer.on('call', call => call.answer(stream));
+        }).catch(err => alert("카메라/마이크 권한을 허용해주세요."));
     }
 
-    // 💻 컴퓨터에서 연결 버튼 클릭 시
+    // 💻 [PC] 화면 연결 (캠/마이크 없어도 작동하도록 가상 스트림 생성)
     function connectToPhone() {
         const targetId = document.getElementById('target-id').value.trim();
-        if (!targetId) {
-            alert("연결할 스마트폰 방 번호를 입력해 주세요.");
-            return;
-        }
+        if (!targetId) return alert("방 번호를 입력하세요!");
 
-        // PeerJS 특성상 가짜 미디어스트림을 던져서 수신을 유도합니다.
-        const fakeStream = new MediaStream();
-        const call = peer.call(targetId, fakeStream);
+        if (!peer) peer = new Peer(); // PC는 무작위 ID 발급
 
-        call.on('stream', (remoteStream) => {
-            const remoteVideo = document.getElementById('remote-video');
-            remoteVideo.srcObject = remoteStream;
+        peer.on('open', () => {
+            document.getElementById('pc-log').innerText = "연결 시도 중...";
             
-            // 브라우저 보안 정책상 첫 로드 시 소리가 안 나올 수 있으므로 안심 재생 처리
-            remoteVideo.play().catch(e => {
-                console.log("자동 재생을 위해 화면을 한 번 클릭해 주세요.");
+            // PC에 캠이 없어서 나는 에러를 막기 위한 가상 스트림(Dummy Stream) 생성
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const ctx = new AudioContext();
+            const dummyStream = ctx.createMediaStreamDestination().stream;
+
+            const call = peer.call(targetId, dummyStream);
+
+            call.on('stream', remoteStream => {
+                document.getElementById('pc-log').innerText = "🟢 연결 성공! (클릭하면 소리가 켜집니다)";
+                const remoteVideo = document.getElementById('remote-video');
+                remoteVideo.srcObject = remoteStream;
+                remoteVideo.play();
+            });
+
+            call.on('error', () => {
+                document.getElementById('pc-log').innerText = "❌ 연결 실패. 스마트폰 방 번호를 확인하세요.";
             });
         });
     }
