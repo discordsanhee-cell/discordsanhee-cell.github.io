@@ -4,21 +4,23 @@
     <meta charset="UTF-8">
     <title>🔥 고기 마스터 프로</title>
     <style>
-        body { background: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: sans-serif; }
+        body { background: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: sans-serif; flex-direction: column; }
         .box { background: #333; padding: 25px; border-radius: 15px; text-align: center; width: 340px; border: 3px solid #ff4757; }
         select { width: 100%; padding: 12px; margin: 6px 0; border-radius: 5px; }
         #timer { font-size: 50px; font-weight: bold; margin: 20px 0; color: #ffeb3b; }
         button { width: 100%; padding: 15px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; background: #ff4757; color: white; }
+        
+        /* 유튜브 영상 숨김 처리 */
+        #yt-player { display: none; margin-top: 20px; border: 2px solid #555; border-radius: 8px; }
     </style>
 </head>
 <body>
 
 <div class="box">
     <h2>🔥 고기 마스터 프로</h2>
-    <!-- 부위 선택 추가 -->
     <select id="meat-type">
-        <option value="beef">소고기 (등심/안심/갈비)</option>
-        <option value="pork">돼지고기 (삼겹살/목살)</option>
+        <option value="beef">소고기</option>
+        <option value="pork">돼지고기</option>
     </select>
     <select id="part">
         <option value="일반">일반 부위</option>
@@ -33,9 +35,11 @@
     </select>
     <div id="timer">00:00</div>
     <button onclick="start()">굽기 시작</button>
-    <!-- 오디오 태그 -->
     <audio id="grill-sound" src="m.m4a"></audio>
 </div>
+
+<!-- 유튜브 영상 영역 -->
+<iframe id="yt-player" width="340" height="191" src="https://www.youtube.com/embed/RKJvo6fAMmg?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
 
 <script>
     let timer, sec = 0;
@@ -52,7 +56,10 @@
         clearInterval(timer);
         sec = 0;
         
-        // 1. 사운드 재생
+        // 1. 유튜브 영상 노출 및 재생
+        document.getElementById('yt-player').style.display = 'block';
+
+        // 2. 사운드 파일 재생 (m.m4a)
         const sound = document.getElementById('grill-sound');
         sound.play();
 
@@ -61,8 +68,6 @@
         const level = document.getElementById('level').value;
         
         const times = {'rare': 120, 'medium-rare': 150, 'medium': 180, 'medium-well': 210, 'welldone': 270};
-        
-        // 두꺼운 고기면 시간 1.5배
         let total = times[level] * (part === '두꺼운' ? 1.5 : 1) * (meat === 'pork' ? 1.5 : 1);
         let flip = total / 2;
 
@@ -83,7 +88,7 @@
             if(sec === total) {
                 clearInterval(timer);
                 speak("끝났어! 지금 당장 꺼내! 안 그러면 다 타버려!");
-                sound.pause(); // 다 익으면 소리 정지
+                sound.pause();
             }
         }, 1000);
     }
