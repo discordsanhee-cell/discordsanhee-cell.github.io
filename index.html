@@ -2,11 +2,11 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>🔥 캠핑 고기 마스터</title>
+    <title>🔥 고기 마스터 프로</title>
     <style>
         body { background: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: sans-serif; }
-        .box { background: #333; padding: 25px; border-radius: 15px; text-align: center; width: 320px; border: 3px solid #ff4757; }
-        select { width: 100%; padding: 12px; margin: 8px 0; border-radius: 5px; }
+        .box { background: #333; padding: 25px; border-radius: 15px; text-align: center; width: 340px; border: 3px solid #ff4757; }
+        select { width: 100%; padding: 12px; margin: 6px 0; border-radius: 5px; }
         #timer { font-size: 50px; font-weight: bold; margin: 20px 0; color: #ffeb3b; }
         button { width: 100%; padding: 15px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; background: #ff4757; color: white; }
     </style>
@@ -14,20 +14,27 @@
 <body>
 
 <div class="box">
-    <h2>🔥 고기 마스터 타이머</h2>
+    <h2>🔥 고기 마스터 프로</h2>
+    <!-- 부위 선택 추가 -->
     <select id="meat-type">
-        <option value="beef">소고기</option>
-        <option value="pork">돼지고기</option>
+        <option value="beef">소고기 (등심/안심/갈비)</option>
+        <option value="pork">돼지고기 (삼겹살/목살)</option>
+    </select>
+    <select id="part">
+        <option value="일반">일반 부위</option>
+        <option value="두꺼운">두꺼운 스테이크형</option>
     </select>
     <select id="level">
         <option value="rare">레어</option>
         <option value="medium-rare">미디움 레어</option>
         <option value="medium" selected>미디움</option>
         <option value="medium-well">미디움 웰던</option>
-        <option value="welldone">웰던 (돼지고기는 이것 추천)</option>
+        <option value="welldone">웰던</option>
     </select>
     <div id="timer">00:00</div>
     <button onclick="start()">굽기 시작</button>
+    <!-- 오디오 태그 -->
+    <audio id="grill-sound" src="m.m4a"></audio>
 </div>
 
 <script>
@@ -44,25 +51,27 @@
     function start() {
         clearInterval(timer);
         sec = 0;
+        
+        // 1. 사운드 재생
+        const sound = document.getElementById('grill-sound');
+        sound.play();
+
         const meat = document.getElementById('meat-type').value;
+        const part = document.getElementById('part').value;
         const level = document.getElementById('level').value;
         
-        // 굽기별 총 시간 (소고기 2cm 기준, 돼지는 더 오래 걸리게 설정)
-        const times = {
-            'rare': 120, 'medium-rare': 150, 'medium': 180, 'medium-well': 210, 'welldone': 270
-        };
+        const times = {'rare': 120, 'medium-rare': 150, 'medium': 180, 'medium-well': 210, 'welldone': 270};
         
-        // 돼지고기면 시간 1.5배 증가
-        let total = times[level] * (meat === 'pork' ? 1.5 : 1);
+        // 두꺼운 고기면 시간 1.5배
+        let total = times[level] * (part === '두꺼운' ? 1.5 : 1) * (meat === 'pork' ? 1.5 : 1);
         let flip = total / 2;
 
-        speak("고기를 올리세요! 굽기를 시작합니다.");
+        speak("고기를 올리세요. 굽기를 시작합니다.");
         
         timer = setInterval(() => {
             sec++;
             document.getElementById('timer').innerText = Math.floor(sec/60).toString().padStart(2,0) + ":" + (sec%60).toString().padStart(2,0);
             
-            // 멘트 분기 처리
             if(sec === flip) {
                 if(meat === 'beef') {
                     speak("이봐! 고기 뒤집어! 안 뒤집으면 만 원 넘는 소고기 탄다!!");
@@ -74,6 +83,7 @@
             if(sec === total) {
                 clearInterval(timer);
                 speak("끝났어! 지금 당장 꺼내! 안 그러면 다 타버려!");
+                sound.pause(); // 다 익으면 소리 정지
             }
         }, 1000);
     }
