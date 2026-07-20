@@ -1,0 +1,81 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
+
+// 방 목록 데이터베이스 (메모리)
+const rooms = {}; 
+
+io.on('connection', (socket) => {
+    // 1. 방 만들기 (호스트)
+    socket.on('createRoom', ({ roomId, password }) => {
+        if (rooms[roomId]) {
+            socket.emit('message', { success: false, msg: "이미 존재하는 방 번호입니다." });
+            return;
+        }
+        rooms[roomId] = {
+            password: password,
+            players: [socket.id],
+            turn: 0, // 0: 호스트, 1: 게스트
+            words: []
+        };
+        socket.join(roomId);
+        socket.roomId = roomId;
+        socket.emit('roomCreated', { roomId });
+    });
+
+    // 2. 방 참가하기 (게스트)
+    socket.on('joinRoom', ({ roomId, password }) => {
+        const room = rooms[roomId];
+        if (!room) {
+            socket.emit('message', { success: false, msg: "방이 존재하지 않습니다." });
+            return;
+        }
+        if (room.password && room.password !== password) {
+            socket.emit('message', { success: false, msg: "비밀번호가 틀렸습니다." });
+            return;
+        }
+        if (room.players.length >= 2) {
+            socket.emit('message', { success: false, msg: "방이 가득 찼습니다." });
+            return;
+        }
+
+        room.players.push(socket.id);
+        socket.join(roomId);
+        socket.roomId = roomId;
+
+        // 게임 시작 알림
+        io.to(roomId).emit('gameStart', {
+            players: room.players,
+            currentTurn: room.players[0] // 호스트 선공
+        });
+    });
+
+    // 3. 단어 전송
+    socket.on('sendWord', ({ word }) => {
+        const roomId = socket.roomId;
+        const room = rooms[roomId];
+        if (room) {
+            room.words.push(word);
+            // 상대방 및 본인에게 턴 이동 및 단어 공유
+            io.to(roomId).emit('wordUpdated', {
+                word,
+                nextTurnPlayer: room.players.find(id => id !== socket.id)
+            });
+        }
+    });
+
+    // 4. 연결 해제 처리
+    socket.on('disconnect', () => {
+        const roomId = socket.roomId;
+        if (roomId && rooms[roomId]) {
+            delete rooms[roomId];
+            io.to(roomId).emit('message', { success: false, msg: "상대방이 나갔습니다." });
+        }
+    });
+});
+
+server.listen(3000, () => console.log('Server running on port 3000'));
