@@ -1,81 +1,467 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>끝말잇기</title>
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+<!-- Socket.io 통신 라이브러리 추가 -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-// 방 목록 데이터베이스 (메모리)
-const rooms = {}; 
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: #f3f4f6; color: #111827; }
+header { background: #111827; color: white; text-align: center; padding: 25px; }
+header h1 { margin: 0 0 8px; }
+.container { max-width: 700px; margin: 25px auto; padding: 15px; }
+.status { background: white; padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 15px; }
+#turn { font-size: 20px; font-weight: bold; }
+#lastWord { font-size: 30px; color: #2563eb; margin-top: 10px; }
+.input-area { display: flex; gap: 10px; margin-bottom: 12px; }
+input { flex: 1; padding: 15px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 18px; }
+button { border: none; border-radius: 10px; cursor: pointer; font-size: 16px; transition: 0.2s; }
+button:hover { filter: brightness(0.9); }
+#submitBtn { padding: 0 25px; background: #2563eb; color: white; }
+.extra-buttons { display: flex; gap: 10px; margin-bottom: 15px; }
+.extra-buttons button { flex: 1; padding: 14px; color: white; }
+#hintBtn { background: #f59e0b; }
+#passBtn { background: #8b5cf6; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+#restartBtn { padding: 14px 20px; background: #64748b; color: white; width: 100%; margin-bottom: 15px;}
+.message { background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; min-height: 50px; font-weight: bold; }
+.words { background: white; padding: 20px; border-radius: 15px; }
+.word-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.word { background: #dbeafe; padding: 8px 12px; border-radius: 20px; }
+#loading { color: #2563eb; font-weight: bold; }
+.rules { margin-top: 20px; color: #6b7280; line-height: 1.8; font-size: 14px; }
 
-io.on('connection', (socket) => {
-    // 1. 방 만들기 (호스트)
-    socket.on('createRoom', ({ roomId, password }) => {
-        if (rooms[roomId]) {
-            socket.emit('message', { success: false, msg: "이미 존재하는 방 번호입니다." });
+/* 멀티플레이 패널 스타일 */
+.multiplayer-panel { background: #e0e7ff; padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 2px dashed #818cf8; }
+.multiplayer-panel h3 { margin-top: 0; color: #3730a3; }
+.mp-buttons { display: flex; gap: 10px; margin-top: 10px; }
+.mp-buttons button { flex: 1; padding: 12px; font-weight: bold; }
+#hostBtn { background: #10b981; color: white; }
+#joinBtn { background: #3b82f6; color: white; }
+
+@media (max-width: 600px) {
+    .input-area { flex-direction: column; }
+    #submitBtn { padding: 14px; }
+    .mp-buttons { flex-direction: column; }
+}
+</style>
+</head>
+
+<body>
+<header>
+    <h1>🔤 끝말잇기</h1>
+    <p id="gameModeText">나 vs 컴퓨터 (싱글 플레이)</p>
+</header>
+
+<div class="container">
+    <div id="loading" class="status">📚 단어 사전 불러오는 중...</div>
+
+    <!-- 멀티플레이 접속 패널 -->
+    <div class="multiplayer-panel" id="mpPanel">
+        <h3>🌐 온라인 접속</h3>
+        <p style="font-size: 14px; margin: 0 0 10px 0; color: #4b5563;">
+            서버에 접속하여 다른 사람과 플레이하려면 아래 버튼을 사용하세요.
+        </p>
+        <div class="mp-buttons">
+            <button id="hostBtn">🏠 방 만들기 (호스트)</button>
+            <button id="joinBtn">🚀 참가하기 (게스트)</button>
+        </div>
+    </div>
+
+    <div class="status">
+        <div id="turn">단어를 입력하세요</div>
+        <div id="lastWord">-</div>
+    </div>
+
+    <div class="input-area">
+        <input id="wordInput" placeholder="단어 입력" autocomplete="off" disabled>
+        <button id="submitBtn" disabled>입력</button>
+    </div>
+
+    <div class="extra-buttons">
+        <button id="hintBtn" disabled>💡 힌트 <span id="hintCount">1</span></button>
+        <button id="passBtn" disabled>⏭️ 패스 <span id="passCount">3</span></button>
+    </div>
+
+    <div id="message" class="message">단어를 불러오는 중입니다.</div>
+
+    <div class="words">
+        <h3>📚 사용한 단어</h3>
+        <div id="wordList" class="word-list"></div>
+    </div>
+    <br>
+    <button id="restartBtn">🔄 게임 초기화 (방 나가기)</button>
+
+    <div class="rules">
+        <b>게임 규칙</b><br>
+        • 사전에 있는 단어만 사용할 수 있습니다.<br>
+        • 이미 사용한 단어는 사용할 수 없습니다.<br>
+        • 두음법칙을 적용합니다.<br>
+        • 첫 턴에는 한방 단어를 사용할 수 없습니다.<br>
+        • 컴퓨터는 진짜 한방 단어를 사용하지 않습니다.<br>
+        • 힌트는 1개, 패스는 3개입니다. (멀티 시 아이템 각자 사용)
+    </div>
+</div>
+
+<script>
+/* ==========================================
+   설정 및 전역 변수
+========================================== */
+const WORD_FILE = "wordslist.txt";
+let words = [];
+let wordSet = new Set();
+let usedWords = new Set();
+let lastWord = "";
+let gameOver = false;
+let hintCount = 1;
+let passCount = 3;
+
+// Socket.io 통신 객체 생성 (서버 주소 입력)
+// 로컬 테스트 시 "http://localhost:3000", 실제 배포 시엔 서버 URL로 변경
+const socket = io("http://localhost:3000"); 
+
+let isMultiplayer = false;
+let mySocketId = null;
+let isMyTurn = true;
+
+/* ==========================================
+   HTML 요소
+========================================== */
+const input = document.getElementById("wordInput");
+const submitBtn = document.getElementById("submitBtn");
+const hintBtn = document.getElementById("hintBtn");
+const passBtn = document.getElementById("passBtn");
+const restartBtn = document.getElementById("restartBtn");
+const hintCountText = document.getElementById("hintCount");
+const passCountText = document.getElementById("passCount");
+const message = document.getElementById("message");
+const turn = document.getElementById("turn");
+const lastWordText = document.getElementById("lastWord");
+const wordList = document.getElementById("wordList");
+const loading = document.getElementById("loading");
+
+const mpPanel = document.getElementById("mpPanel");
+const hostBtn = document.getElementById("hostBtn");
+const joinBtn = document.getElementById("joinBtn");
+const gameModeText = document.getElementById("gameModeText");
+
+/* ==========================================
+   두음법칙 / 단어 후보 로직
+========================================== */
+function getPossibleFirstLetters(lastChar) {
+    const result = new Set([lastChar]);
+    const rules = { "녀":"여", "뇨":"요", "뉴":"유", "니":"이", "랴":"야", "려":"여", "례":"예", "료":"요", "류":"유", "리":"이", "라":"나", "래":"내", "로":"노", "뢰":"뇌", "루":"누" };
+    if (rules[lastChar]) result.add(rules[lastChar]);
+    return [...result];
+}
+
+function getCandidates() {
+    if (lastWord === "") return words.filter(word => !usedWords.has(word));
+    const possibleLetters = getPossibleFirstLetters(lastWord[lastWord.length - 1]);
+    return words.filter(w => possibleLetters.includes(w[0]) && !usedWords.has(w));
+}
+
+function countNextWords(word) {
+    const possibleLetters = getPossibleFirstLetters(word[word.length - 1]);
+    let count = 0;
+    for (const nextWord of words) {
+        if (possibleLetters.includes(nextWord[0]) && !usedWords.has(nextWord) && nextWord !== word) count++;
+    }
+    return count;
+}
+
+function isFirstTurnValid(word) {
+    const oldLastWord = lastWord;
+    lastWord = word;
+    const nextWords = getCandidates();
+    lastWord = oldLastWord;
+    return nextWords.length >= 2;
+}
+
+/* ==========================================
+   플레이어 턴
+========================================== */
+function playerTurn() {
+    if (gameOver) return;
+    const word = input.value.trim();
+
+    if (!word) { showMessage("단어를 입력하세요."); return; }
+    if (!wordSet.has(word)) { showMessage("❌ 사전에 없는 단어입니다."); return; }
+    if (usedWords.has(word)) { showMessage("❌ 이미 사용한 단어입니다."); return; }
+
+    if (lastWord === "") {
+        if (!isFirstTurnValid(word)) { showMessage("❌ 첫 턴에는 한방 단어를 사용할 수 없습니다!"); return; }
+    } else {
+        const possibleLetters = getPossibleFirstLetters(lastWord[lastWord.length - 1]);
+        if (!possibleLetters.includes(word[0])) {
+            showMessage(`❌ "${possibleLetters.join(" 또는 ")}"로 시작해야 합니다.`);
             return;
         }
-        rooms[roomId] = {
-            password: password,
-            players: [socket.id],
-            turn: 0, // 0: 호스트, 1: 게스트
-            words: []
-        };
-        socket.join(roomId);
-        socket.roomId = roomId;
-        socket.emit('roomCreated', { roomId });
-    });
+    }
 
-    // 2. 방 참가하기 (게스트)
-    socket.on('joinRoom', ({ roomId, password }) => {
-        const room = rooms[roomId];
-        if (!room) {
-            socket.emit('message', { success: false, msg: "방이 존재하지 않습니다." });
-            return;
-        }
-        if (room.password && room.password !== password) {
-            socket.emit('message', { success: false, msg: "비밀번호가 틀렸습니다." });
-            return;
-        }
-        if (room.players.length >= 2) {
-            socket.emit('message', { success: false, msg: "방이 가득 찼습니다." });
-            return;
-        }
+    addWord(word);
+    input.value = "";
+    message.textContent = `✅ ${word} 입력 성공!`;
 
-        room.players.push(socket.id);
-        socket.join(roomId);
-        socket.roomId = roomId;
+    if (isMultiplayer) {
+        // 서버로 단어 전송
+        socket.emit('sendWord', { word: word });
+        isMyTurn = false;
+        turn.textContent = "⏳ 상대방 차례 대기 중...";
+        disablePlayerControls();
+    } else {
+        turn.textContent = "🤖 컴퓨터 생각 중...";
+        disablePlayerControls();
+        setTimeout(computerTurn, 700);
+    }
+}
 
-        // 게임 시작 알림
-        io.to(roomId).emit('gameStart', {
-            players: room.players,
-            currentTurn: room.players[0] // 호스트 선공
-        });
-    });
+/* ==========================================
+   컴퓨터 턴 (싱글 플레이용)
+========================================== */
+function computerTurn() {
+    if (gameOver || isMultiplayer) return;
+    const candidates = getCandidates();
+    if (candidates.length === 0) {
+        endGame("🎉 컴퓨터가 이어갈 단어를 찾지 못했습니다! 당신의 승리!");
+        return;
+    }
 
-    // 3. 단어 전송
-    socket.on('sendWord', ({ word }) => {
-        const roomId = socket.roomId;
-        const room = rooms[roomId];
-        if (room) {
-            room.words.push(word);
-            // 상대방 및 본인에게 턴 이동 및 단어 공유
-            io.to(roomId).emit('wordUpdated', {
-                word,
-                nextTurnPlayer: room.players.find(id => id !== socket.id)
-            });
-        }
-    });
+    const scoredCandidates = candidates.map(word => ({ word, nextCount: countNextWords(word) }));
+    const playableCandidates = scoredCandidates.filter(item => item.nextCount > 0);
+    const pool = playableCandidates.length > 0 ? playableCandidates : scoredCandidates;
 
-    // 4. 연결 해제 처리
-    socket.on('disconnect', () => {
-        const roomId = socket.roomId;
-        if (roomId && rooms[roomId]) {
-            delete rooms[roomId];
-            io.to(roomId).emit('message', { success: false, msg: "상대방이 나갔습니다." });
-        }
-    });
+    const easyWords = pool.filter(i => i.nextCount >= 6);
+    const mediumWords = pool.filter(i => i.nextCount >= 2 && i.nextCount <= 5);
+    const hardWords = pool.filter(i => i.nextCount === 1);
+
+    let selected = null;
+    const random = Math.random();
+
+    if (random < 0.70 && easyWords.length > 0) selected = easyWords[Math.floor(Math.random() * easyWords.length)];
+    else if (random < 0.95 && mediumWords.length > 0) selected = mediumWords[Math.floor(Math.random() * mediumWords.length)];
+    else if (hardWords.length > 0) selected = hardWords[Math.floor(Math.random() * hardWords.length)];
+    
+    if (!selected) selected = pool[Math.floor(Math.random() * pool.length)];
+
+    const computerWord = selected.word;
+    addWord(computerWord);
+    message.textContent = `🤖 컴퓨터: ${computerWord}`;
+    turn.textContent = "👤 당신의 차례입니다.";
+    enablePlayerControls();
+}
+
+/* ==========================================
+   아이템 (힌트/패스) 
+========================================== */
+function useHint() {
+    if (gameOver) return;
+    if (hintCount <= 0) { showMessage("❌ 힌트를 모두 사용했습니다."); return; }
+    const candidates = getCandidates();
+    if (candidates.length === 0) { endGame("🎉 이어갈 단어가 없습니다!"); return; }
+
+    const hintWord = candidates[Math.floor(Math.random() * candidates.length)];
+    hintCount--; hintCountText.textContent = hintCount; hintBtn.disabled = true;
+    showMessage(`💡 힌트: ${hintWord}`);
+}
+
+function usePass() {
+    if (gameOver) return;
+    if (passCount <= 0) { showMessage("❌ 패스를 모두 사용했습니다."); return; }
+    
+    passCount--; passCountText.textContent = passCount;
+    
+    if (isMultiplayer) {
+        // 서버에는 "통과"라는 특별한 키워드나 임의의 문구를 보내 패스 처리할 수도 있습니다.
+        // 여기서는 임시 텍스트로 보냅니다.
+        socket.emit('sendWord', { word: "(패스)" });
+        isMyTurn = false;
+        turn.textContent = "⏳ 상대방 차례 대기 중...";
+        disablePlayerControls();
+    } else {
+        message.textContent = "⏭️ 패스!";
+        turn.textContent = "🤖 컴퓨터 생각 중...";
+        disablePlayerControls();
+        setTimeout(computerTurn, 700);
+    }
+}
+
+/* ==========================================
+   유틸 및 게임 제어
+========================================== */
+function addWord(word) {
+    if(word !== "(패스)") {
+        usedWords.add(word);
+        lastWord = word;
+        lastWordText.textContent = word;
+    }
+    const element = document.createElement("span");
+    element.className = "word";
+    element.textContent = word;
+    wordList.appendChild(element);
+}
+
+function enablePlayerControls() {
+    input.disabled = false; submitBtn.disabled = false;
+    hintBtn.disabled = hintCount <= 0; passBtn.disabled = passCount <= 0;
+    input.focus();
+}
+
+function disablePlayerControls() {
+    input.disabled = true; submitBtn.disabled = true;
+    hintBtn.disabled = true; passBtn.disabled = true;
+}
+
+function showMessage(text) { message.textContent = text; }
+
+function endGame(text) {
+    gameOver = true;
+    turn.textContent = "🏁 게임 종료";
+    message.textContent = text;
+    disablePlayerControls();
+}
+
+function resetGameState() {
+    usedWords.clear(); lastWord = ""; gameOver = false;
+    hintCount = 1; passCount = 3;
+    hintCountText.textContent = hintCount; passCountText.textContent = passCount;
+    wordList.innerHTML = ""; lastWordText.textContent = "-";
+    input.value = "";
+}
+
+function restartGame() {
+    if (words.length === 0) return;
+    
+    // 만약 온라인 연결되어 있었다면 창을 새로고침하여 끊습니다.
+    if(isMultiplayer) {
+        window.location.reload();
+        return;
+    }
+
+    resetGameState();
+    turn.textContent = "👤 당신의 차례입니다.";
+    message.textContent = "첫 단어를 입력하세요.";
+    enablePlayerControls();
+}
+
+/* ==========================================
+   온라인 멀티플레이 (Socket.io) 로직
+========================================== */
+
+socket.on('connect', () => {
+    mySocketId = socket.id;
 });
 
-server.listen(3000, () => console.log('Server running on port 3000'));
+// 방 생성 버튼
+hostBtn.addEventListener('click', () => {
+    const roomId = prompt("생성할 방 이름(ID)을 입력하세요:");
+    if(!roomId) return;
+    const password = prompt("비밀번호를 설정하세요 (없으면 그냥 확인):") || "";
+    
+    socket.emit('createRoom', { roomId, password });
+});
+
+// 방 참가 버튼
+joinBtn.addEventListener('click', () => {
+    const roomId = prompt("참가할 방 이름(ID)을 입력하세요:");
+    if(!roomId) return;
+    const password = prompt("비밀번호를 입력하세요:") || "";
+    
+    socket.emit('joinRoom', { roomId, password });
+});
+
+// 방 생성 성공
+socket.on('roomCreated', (data) => {
+    isMultiplayer = true;
+    mpPanel.style.display = "none";
+    gameModeText.textContent = `나 vs 친구 (온라인) - 방: ${data.roomId}`;
+    resetGameState();
+    disablePlayerControls();
+    
+    turn.textContent = "⏳ 대기 중...";
+    showMessage(`방 [${data.roomId}]이 생성되었습니다. 상대방을 기다리는 중...`);
+});
+
+// 게임 시작
+socket.on('gameStart', (data) => {
+    isMultiplayer = true;
+    mpPanel.style.display = "none";
+    gameModeText.textContent = "나 vs 친구 (온라인)";
+    resetGameState();
+    
+    isMyTurn = (data.currentTurn === mySocketId);
+    
+    if (isMyTurn) {
+        turn.textContent = "👤 당신의 차례입니다! (선공)";
+        enablePlayerControls();
+    } else {
+        turn.textContent = "상대방이 먼저 시작합니다...";
+        disablePlayerControls();
+    }
+    showMessage("🎮 온라인 대전이 시작되었습니다!");
+});
+
+// 단어 수신
+socket.on('wordUpdated', (data) => {
+    // 상대방이 보낸 단어인지 내 단어인지 상관없이 UI에 추가
+    // (내 단어는 playerTurn에서 이미 추가했지만, 동기화를 위해 서버 기준으로 처리하려면 방식을 바꿀 수 있음.
+    // 여기서는 상대방이 입력한 것만 addWord하도록 처리합니다)
+    if(data.nextTurnPlayer === mySocketId) {
+        addWord(data.word); // 상대방이 입력한 단어 추가
+        isMyTurn = true;
+        turn.textContent = "👤 당신의 차례입니다.";
+        message.textContent = "상대방이 단어를 입력했습니다!";
+        enablePlayerControls();
+    } else {
+        // 내가 입력한 후 서버 응답
+        isMyTurn = false;
+        turn.textContent = "⏳ 상대방 차례 대기 중...";
+        disablePlayerControls();
+    }
+});
+
+// 서버 메시지 수신 (오류 등)
+socket.on('message', (data) => {
+    showMessage(data.msg);
+    if(data.msg === "상대방이 나갔습니다.") {
+        endGame("⚠️ 상대방과 연결이 끊어졌습니다.");
+    }
+});
+
+/* ==========================================
+   이벤트 할당
+========================================== */
+submitBtn.addEventListener("click", playerTurn);
+hintBtn.addEventListener("click", useHint);
+passBtn.addEventListener("click", usePass);
+restartBtn.addEventListener("click", restartGame);
+input.addEventListener("keydown", e => { if (e.key === "Enter") playerTurn(); });
+
+/* ==========================================
+   단어 사전 불러오기
+========================================== */
+async function loadWords() {
+    try {
+        const response = await fetch(WORD_FILE);
+        if (!response.ok) throw new Error("wordslist.txt를 불러올 수 없습니다.");
+        const text = await response.text();
+        words = text.split(/\r?\n/).map(w => w.trim()).filter(w => /^[가-힣]+$/.test(w) && w.length >= 2);
+        wordSet = new Set(words);
+
+        loading.textContent = `📚 ${words.length.toLocaleString()}개의 단어를 불러왔습니다.`;
+        restartGame();
+    } catch (error) {
+        loading.textContent = "❌ 단어 파일을 불러오지 못했습니다.";
+        message.textContent = "index.html과 wordslist.txt가 같은 폴더에 있는지 확인하세요.";
+    }
+}
+
+loadWords();
+
+</script>
+</body>
+</html>
