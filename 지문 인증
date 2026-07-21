@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>지문 인증 & 커스텀 TTS 컨트롤러</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #f0f2f5;
+    }
+    .card {
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      text-align: center;
+      max-width: 420px;
+      width: 90%;
+    }
+    .control-group {
+      margin: 15px 0;
+      text-align: left;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 5px;
+      color: #444;
+    }
+    select, input[type="range"] {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .value-display {
+      font-size: 13px;
+      color: #666;
+      width: 35px;
+    }
+    button {
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 15px;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background-color: #1d4ed8;
+    }
+    #status {
+      margin-top: 18px;
+      font-weight: bold;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>🔒 생체 인증 & TTS 설정</h2>
+    
+    <!-- TTS 설정 섹션 -->
+    <div class="control-group">
+      <label for="voiceSelect">🔊 음성 선택</label>
+      <select id="voiceSelect"></select>
+    </div>
+
+    <div class="control-group">
+      <label for="pitch">🎵 피치 (음높이): <span id="pitchVal">1.0</span></label>
+      <div class="slider-container">
+        <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1.0">
+      </div>
+    </div>
+
+    <div class="control-group">
+      <label for="rate">⚡ 속도 (말하기 속도): <span id="rateVal">1.0</span></label>
+      <div class="slider-container">
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1.0">
+      </div>
+    </div>
+
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+    <button onclick="startFingerprintAuth()">지문 인증 시작</button>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const voiceSelect = document.getElementById('voiceSelect');
+    const pitchInput = document.getElementById('pitch');
+    const rateInput = document.getElementById('rate');
+    const pitchVal = document.getElementById('pitchVal');
+    const rateVal = document.getElementById('rateVal');
+
+    let voices = [];
+
+    // 1. 브라우저에서 사용 가능한 음성 목록 로드
+    function loadVoices() {
+      voices = speechSynthesis.getVoices();
+      voiceSelect.innerHTML = '';
+
+      // 한국어 음성을 우선 검색 및 정렬
+      const koVoices = voices.filter(voice => voice.lang.includes('ko'));
+      const otherVoices = voices.filter(voice => !voice.lang.includes('ko'));
+      const sortedVoices = [...koVoices, ...otherVoices];
+
+      sortedVoices.forEach(voice => {
+        const option = document.createElement('option');
+        option.textContent = `${voice.name} (${voice.lang})`;
+        option.setAttribute('data-lang', voice.lang);
+        option.setAttribute('data-name', voice.name);
+        
+        // 'Heami'나 한국어 음성이 있다면 기본 선택
+        if (voice.name.includes('Heami') || (voice.lang.includes('ko') && !voiceSelect.value)) {
+          option.selected = true;
+        }
+        
+        voiceSelect.appendChild(option);
+      });
+    }
+
+    // Chrome 등 일부 브라우저의 비동기 음성 로딩 대응
+    loadVoices();
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    // 슬라이더 값 변경 시 실시간 표시 업데이트
+    pitchInput.addEventListener('input', () => pitchVal.textContent = pitchInput.value);
+    rateInput.addEventListener('input', () => rateVal.textContent = rateInput.value);
+
+    // 2. 설정된 옵션으로 TTS 안내 음성 재생
+    function speakCustomTTS(text) {
+      // 기존에 재생 중인 음성이 있다면 중단
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // 선택한 음성 적용
+      const selectedOption = voiceSelect.selectedOptions[0]?.getAttribute('data-name');
+      const selectedVoice = voices.find(v => v.name === selectedOption);
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      // 피치 및 속도 적용
+      utterance.pitch = parseFloat(pitchInput.value); // 범위: 0.5 ~ 2.0
+      utterance.rate = parseFloat(rateInput.value);   // 범위: 0.5 ~ 2.0
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 3. 지문 인증 로직
+    async function startFingerprintAuth() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.style.color = '#333';
+      statusDiv.innerText = '지문 인식을 진행 중입니다...';
+
+      if (!window.PublicKeyCredential) {
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '이 브라우저는 지문 인식을 지원하지 않습니다.';
+        return;
+      }
+
+      try {
+        const publicKeyCredentialCreationOptions = {
+          challenge: new Uint8Array(32),
+          rp: { name: "GitHub Pages Auth Demo" },
+          user: {
+            id: new Uint8Array(16),
+            name: "user@example.com",
+            displayName: "사용자"
+          },
+          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          authenticatorSelection: {
+            authenticatorAttachment: "platform",
+            userVerification: "required"
+          },
+          timeout: 60000
+        };
+
+        const credential = await navigator.credentials.create({
+          publicKey: publicKeyCredentialCreationOptions
+        });
+
+        if (credential) {
+          statusDiv.style.color = '#16a34a';
+          statusDiv.innerText = '✅ 인증이 완료되었습니다!';
+          
+          // 설정한 피치/속도로 음성 재생
+          speakCustomTTS("인증이 완료되었습니다.");
+        }
+      } catch (err) {
+        console.error(err);
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '❌ 인증 실패 또는 취소되었습니다.';
+      }
+    }
+  </script>
+</body>
+</html>
