@@ -3,20 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <title>🔥 고기 마스터 프로 (유튜브 제어)</title>
+<div id="black-overlay"></div>
+
 <script>
-  // 1. delay 함수 정의
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-  // 2. 페이지 진입 즉시 실행되는 async 익명 함수
   (async () => {
-    // 경고창 띄우기 (확인 누를 때까지 대기)
-    alert('페이지 로드에 문제가 발생하였습니다. 확인을 누르면 다시 로드합니다. 4초 정도 걸립니다.');
+    // 1. 들어오자마자 alert 경고창
+    alert('페이지 로드에 문제가 발생하였습니다. 확인을 누르면 다시 로드합니다.');
     
-    // 확인 누른 후 3.5초 대기
+    // 2. 확인 누른 후 3.5초 동안 검은 화면 유지
     await delay(3567);
     
-    // 페이지 새로고침
-    location.reload();
+    // 3. 화면 서서히 켜기
+    const overlay = document.getElementById('black-overlay');
+    overlay.classList.add('fade-out');
   })();
 </script>
     <style>
