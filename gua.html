@@ -6,7 +6,7 @@
   <title>2차 인증 (gua.html)</title>
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background-color: #f3f4f6;
       display: flex;
       justify-content: center;
@@ -20,7 +20,7 @@
       border-radius: 16px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.1);
       width: 90%;
-      max-width: 400px;
+      max-width: 420px;
       text-align: center;
     }
     .control-group {
@@ -34,7 +34,7 @@
       color: #374151;
       margin-bottom: 4px;
     }
-    select, input {
+    select, input[type="range"], input[type="password"] {
       width: 100%;
       padding: 10px;
       border: 1px solid #d1d5db;
@@ -51,9 +51,12 @@
       cursor: pointer;
       width: 100%;
       margin-top: 10px;
+      transition: background 0.2s;
     }
     .btn-passkey { background-color: #2563eb; }
+    .btn-passkey:hover { background-color: #1d4ed8; }
     .btn-pw { background-color: #4f46e5; }
+    .btn-pw:hover { background-color: #4338ca; }
     .btn-reg { background-color: #059669; font-size: 12px; padding: 6px; }
     #status { margin-top: 15px; font-weight: bold; font-size: 14px; }
   </style>
@@ -64,7 +67,7 @@
     <h2>🔐 2차 인증 페이지</h2>
     <p style="font-size: 13px; color: #666;">위젯에 접근하려면 2차 인증을 완료하세요.</p>
     
-    <!-- TTS 설정 -->
+    <!-- TTS 옵션 조절 -->
     <div class="control-group">
       <label for="voiceSelect">🔊 음성 선택</label>
       <select id="voiceSelect"></select>
@@ -98,7 +101,7 @@
 
   <script>
     const SECRET_PASSWORD = "1234";
-    const TARGET_PAGE = "index.html"; // 2차 인증 성공 후 이동할 메인 위젯 페이지
+    const TARGET_PAGE = "index.html"; // 2차 인증 성공 시 이동할 화면
 
     const voiceSelect = document.getElementById('voiceSelect');
     const pitchInput = document.getElementById('pitch');
@@ -106,7 +109,7 @@
     const statusDiv = document.getElementById('status');
     let voices = [];
 
-    // TTS 설정
+    // TTS 음성 목록 로드
     function loadVoices() {
       voices = speechSynthesis.getVoices();
       voiceSelect.innerHTML = '';
@@ -132,6 +135,7 @@
     pitchInput.addEventListener('input', (e) => document.getElementById('pitchVal').textContent = e.target.value);
     rateInput.addEventListener('input', (e) => document.getElementById('rateVal').textContent = e.target.value);
 
+    // TTS 실행 후 이동
     function speakAndRedirect(text) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -140,7 +144,7 @@
       utterance.pitch = parseFloat(pitchInput.value);
       utterance.rate = parseFloat(rateInput.value);
       
-      // 음성 재생이 완전히 끝나면 페이지 이동
+      // 말하기가 끝나면 다음 페이지로 이동
       utterance.onend = () => {
         location.href = TARGET_PAGE;
       };
@@ -148,28 +152,26 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    // 2차 인증 성공 처리
+    // 인증 성공 시
     function onSuccess() {
-      // 2차 인증 통과 깃발 저장
-      localStorage.setItem('2fa_passed', 'true');
+      localStorage.setItem('2fa_passed', 'true'); // 2차 인증 토큰 저장
       statusDiv.style.color = '#16a34a';
       statusDiv.innerText = '✅ 2차 인증 성공! 위젯 페이지로 이동합니다...';
-      
       speakAndRedirect("인증이 완료되었습니다.");
     }
 
-    // 비밀번호 검증
+    // 비밀번호 체크
     function checkPassword() {
       const inputPw = document.getElementById('password').value;
       if (inputPw === SECRET_PASSWORD) {
         onSuccess();
       } else {
         statusDiv.style.color = '#dc2626';
-        statusDiv.innerText = '❌ 비밀번호가 틀렸습니다.';
+        statusDiv.innerText = '❌ 비밀번호가 올바르지 않습니다.';
       }
     }
 
-    // 패스키(지문) 등록
+    // 생체 인증 등록
     async function registerPasskey() {
       try {
         const credential = await navigator.credentials.create({
@@ -194,7 +196,7 @@
       }
     }
 
-    // 패스키(지문) 인증
+    // 생체 인증 진행
     async function authenticatePasskey() {
       const savedId = localStorage.getItem('registered_credential_id');
       if (!savedId) {
