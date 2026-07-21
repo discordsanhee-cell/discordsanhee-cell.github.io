@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2차 인증 (gua.html)</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f3f4f6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      width: 90%;
+      max-width: 400px;
+      text-align: center;
+    }
+    .control-group {
+      margin: 12px 0;
+      text-align: left;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    select, input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    .btn {
+      color: white;
+      border: none;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .btn-passkey { background-color: #2563eb; }
+    .btn-pw { background-color: #4f46e5; }
+    .btn-reg { background-color: #059669; font-size: 12px; padding: 6px; }
+    #status { margin-top: 15px; font-weight: bold; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>🔐 2차 인증 페이지</h2>
+    <p style="font-size: 13px; color: #666;">위젯에 접근하려면 2차 인증을 완료하세요.</p>
+    
+    <!-- TTS 설정 -->
+    <div class="control-group">
+      <label for="voiceSelect">🔊 음성 선택</label>
+      <select id="voiceSelect"></select>
+    </div>
+    <div class="control-group">
+      <label for="pitch">🎵 피치: <span id="pitchVal">1.0</span></label>
+      <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1.0">
+    </div>
+    <div class="control-group">
+      <label for="rate">⚡ 속도: <span id="rateVal">1.0</span></label>
+      <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1.0">
+    </div>
+
+    <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
+
+    <!-- 1. 비밀번호 인증 -->
+    <div class="control-group">
+      <label for="password">🔑 2차 비밀번호 (기본: 1234)</label>
+      <input type="password" id="password" placeholder="비밀번호 입력">
+      <button class="btn btn-pw" onclick="checkPassword()">비밀번호로 2차 인증</button>
+    </div>
+
+    <!-- 2. 지문 / 패스키 인증 -->
+    <div style="margin-top: 15px;">
+      <button class="btn btn-passkey" onclick="authenticatePasskey()">지문 / 패스키로 2차 인증</button>
+      <button class="btn btn-reg" onclick="registerPasskey()">패스키 최초 등록</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const SECRET_PASSWORD = "1234";
+    const TARGET_PAGE = "index.html"; // 2차 인증 성공 후 이동할 메인 위젯 페이지
+
+    const voiceSelect = document.getElementById('voiceSelect');
+    const pitchInput = document.getElementById('pitch');
+    const rateInput = document.getElementById('rate');
+    const statusDiv = document.getElementById('status');
+    let voices = [];
+
+    // TTS 설정
+    function loadVoices() {
+      voices = speechSynthesis.getVoices();
+      voiceSelect.innerHTML = '';
+      const koVoices = voices.filter(v => v.lang.includes('ko'));
+      const otherVoices = voices.filter(v => !v.lang.includes('ko'));
+      
+      [...koVoices, ...otherVoices].forEach(voice => {
+        const option = document.createElement('option');
+        option.textContent = `${voice.name} (${voice.lang})`;
+        option.setAttribute('data-name', voice.name);
+        if (voice.name.includes('Heami') || (voice.lang.includes('ko') && !voiceSelect.value)) {
+          option.selected = true;
+        }
+        voiceSelect.appendChild(option);
+      });
+    }
+
+    loadVoices();
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    pitchInput.addEventListener('input', (e) => document.getElementById('pitchVal').textContent = e.target.value);
+    rateInput.addEventListener('input', (e) => document.getElementById('rateVal').textContent = e.target.value);
+
+    function speakAndRedirect(text) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const selectedVoice = voices.find(v => v.name === voiceSelect.selectedOptions[0]?.getAttribute('data-name'));
+      if (selectedVoice) utterance.voice = selectedVoice;
+      utterance.pitch = parseFloat(pitchInput.value);
+      utterance.rate = parseFloat(rateInput.value);
+      
+      // 음성 재생이 완전히 끝나면 페이지 이동
+      utterance.onend = () => {
+        location.href = TARGET_PAGE;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 2차 인증 성공 처리
+    function onSuccess() {
+      // 2차 인증 통과 깃발 저장
+      localStorage.setItem('2fa_passed', 'true');
+      statusDiv.style.color = '#16a34a';
+      statusDiv.innerText = '✅ 2차 인증 성공! 위젯 페이지로 이동합니다...';
+      
+      speakAndRedirect("인증이 완료되었습니다.");
+    }
+
+    // 비밀번호 검증
+    function checkPassword() {
+      const inputPw = document.getElementById('password').value;
+      if (inputPw === SECRET_PASSWORD) {
+        onSuccess();
+      } else {
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '❌ 비밀번호가 틀렸습니다.';
+      }
+    }
+
+    // 패스키(지문) 등록
+    async function registerPasskey() {
+      try {
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge: new Uint8Array(32),
+            rp: { name: "GUA Auth" },
+            user: { id: Uint8Array.from("user123", c => c.charCodeAt(0)), name: "user@example.com", displayName: "사용자" },
+            pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+            timeout: 60000
+          }
+        });
+        if (credential) {
+          const credentialId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+          localStorage.setItem('registered_credential_id', credentialId);
+          statusDiv.style.color = '#059669';
+          statusDiv.innerText = '🎉 패스키 등록 완료!';
+        }
+      } catch (err) {
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '❌ 패스키 등록 실패';
+      }
+    }
+
+    // 패스키(지문) 인증
+    async function authenticatePasskey() {
+      const savedId = localStorage.getItem('registered_credential_id');
+      if (!savedId) {
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '⚠️ 먼저 패스키를 등록하세요.';
+        return;
+      }
+
+      try {
+        const rawId = Uint8Array.from(atob(savedId), c => c.charCodeAt(0));
+        const assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge: new Uint8Array(32),
+            allowCredentials: [{ id: rawId, type: 'public-key' }],
+            userVerification: "required",
+            timeout: 60000
+          }
+        });
+
+        if (assertion) {
+          onSuccess();
+        }
+      } catch (err) {
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '❌ 지문 인증 실패';
+      }
+    }
+  </script>
+</body>
+</html>
