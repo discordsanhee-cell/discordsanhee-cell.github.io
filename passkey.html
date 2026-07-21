@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>지문 인증 & 커스텀 TTS 컨트롤러</title>
+  <title>지문 등록 & 로그인 테스트</title>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -25,14 +25,14 @@
       width: 90%;
     }
     .control-group {
-      margin: 15px 0;
+      margin: 12px 0;
       text-align: left;
     }
     label {
       display: block;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      margin-bottom: 5px;
+      margin-bottom: 4px;
       color: #444;
     }
     select, input[type="range"] {
@@ -42,64 +42,71 @@
     .slider-container {
       display: flex;
       align-items: center;
-      gap: 10px;
     }
-    .value-display {
-      font-size: 13px;
-      color: #666;
-      width: 35px;
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 15px;
     }
     button {
-      background-color: #2563eb;
       color: white;
       border: none;
       padding: 12px 20px;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       border-radius: 8px;
       cursor: pointer;
       width: 100%;
-      margin-top: 15px;
       transition: background 0.2s;
     }
-    button:hover {
-      background-color: #1d4ed8;
-    }
+    .btn-register { background-color: #059669; }
+    .btn-register:hover { background-color: #047857; }
+    .btn-login { background-color: #2563eb; }
+    .btn-login:hover { background-color: #1d4ed8; }
+    .btn-reset { background-color: #6b7280; font-size: 12px; padding: 6px; margin-top: 10px; }
     #status {
       margin-top: 18px;
       font-weight: bold;
-      font-size: 16px;
+      font-size: 15px;
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <h2>🔒 생체 인증 & TTS 설정</h2>
+    <h2>🔒 지문 등록 및 인증</h2>
     
-    <!-- TTS 설정 섹션 -->
+    <!-- TTS 설정 컨트롤러 -->
     <div class="control-group">
       <label for="voiceSelect">🔊 음성 선택</label>
       <select id="voiceSelect"></select>
     </div>
 
     <div class="control-group">
-      <label for="pitch">🎵 피치 (음높이): <span id="pitchVal">1.0</span></label>
+      <label for="pitch">🎵 피치: <span id="pitchVal">1.0</span></label>
       <div class="slider-container">
         <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1.0">
       </div>
     </div>
 
     <div class="control-group">
-      <label for="rate">⚡ 속도 (말하기 속도): <span id="rateVal">1.0</span></label>
+      <label for="rate">⚡ 속도: <span id="rateVal">1.0</span></label>
       <div class="slider-container">
         <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1.0">
       </div>
     </div>
 
-    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
 
-    <button onclick="startFingerprintAuth()">지문 인증 시작</button>
+    <!-- 버튼 영역 -->
+    <div class="btn-group">
+      <button id="regBtn" class="btn-register" onclick="registerBiometric()">1. 지문 최초 등록하기</button>
+      <button id="authBtn" class="btn-login" onclick="authenticateBiometric()">2. 지문 인증하기</button>
+    </div>
+
+    <button class="btn-reset" onclick="resetBiometric()">등록 정보 초기화</button>
+
     <div id="status"></div>
   </div>
 
@@ -109,110 +116,136 @@
     const rateInput = document.getElementById('rate');
     const pitchVal = document.getElementById('pitchVal');
     const rateVal = document.getElementById('rateVal');
+    const statusDiv = document.getElementById('status');
 
     let voices = [];
 
-    // 1. 브라우저에서 사용 가능한 음성 목록 로드
+    // --- TTS 함수 ---
     function loadVoices() {
       voices = speechSynthesis.getVoices();
       voiceSelect.innerHTML = '';
-
-      // 한국어 음성을 우선 검색 및 정렬
-      const koVoices = voices.filter(voice => voice.lang.includes('ko'));
-      const otherVoices = voices.filter(voice => !voice.lang.includes('ko'));
-      const sortedVoices = [...koVoices, ...otherVoices];
-
-      sortedVoices.forEach(voice => {
+      const koVoices = voices.filter(v => v.lang.includes('ko'));
+      const otherVoices = voices.filter(v => !v.lang.includes('ko'));
+      
+      [...koVoices, ...otherVoices].forEach(voice => {
         const option = document.createElement('option');
         option.textContent = `${voice.name} (${voice.lang})`;
-        option.setAttribute('data-lang', voice.lang);
         option.setAttribute('data-name', voice.name);
-        
-        // 'Heami'나 한국어 음성이 있다면 기본 선택
         if (voice.name.includes('Heami') || (voice.lang.includes('ko') && !voiceSelect.value)) {
           option.selected = true;
         }
-        
         voiceSelect.appendChild(option);
       });
     }
 
-    // Chrome 등 일부 브라우저의 비동기 음성 로딩 대응
     loadVoices();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = loadVoices;
     }
 
-    // 슬라이더 값 변경 시 실시간 표시 업데이트
     pitchInput.addEventListener('input', () => pitchVal.textContent = pitchInput.value);
     rateInput.addEventListener('input', () => rateVal.textContent = rateInput.value);
 
-    // 2. 설정된 옵션으로 TTS 안내 음성 재생
-    function speakCustomTTS(text) {
-      // 기존에 재생 중인 음성이 있다면 중단
+    function speak(text) {
       window.speechSynthesis.cancel();
-
       const utterance = new SpeechSynthesisUtterance(text);
-      
-      // 선택한 음성 적용
-      const selectedOption = voiceSelect.selectedOptions[0]?.getAttribute('data-name');
-      const selectedVoice = voices.find(v => v.name === selectedOption);
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      }
-
-      // 피치 및 속도 적용
-      utterance.pitch = parseFloat(pitchInput.value); // 범위: 0.5 ~ 2.0
-      utterance.rate = parseFloat(rateInput.value);   // 범위: 0.5 ~ 2.0
-
+      const selectedVoice = voices.find(v => v.name === voiceSelect.selectedOptions[0]?.getAttribute('data-name'));
+      if (selectedVoice) utterance.voice = selectedVoice;
+      utterance.pitch = parseFloat(pitchInput.value);
+      utterance.rate = parseFloat(rateInput.value);
       window.speechSynthesis.speak(utterance);
     }
 
-    // 3. 지문 인증 로직
-    async function startFingerprintAuth() {
-      const statusDiv = document.getElementById('status');
-      statusDiv.style.color = '#333';
-      statusDiv.innerText = '지문 인식을 진행 중입니다...';
+    // --- WebAuthn (생체 인증) 핵심 로직 ---
 
-      if (!window.PublicKeyCredential) {
-        statusDiv.style.color = '#dc2626';
-        statusDiv.innerText = '이 브라우저는 지문 인식을 지원하지 않습니다.';
-        return;
-      }
+    // 1. 최초 지문 등록 (create)
+    async function registerBiometric() {
+      statusDiv.style.color = '#333';
+      statusDiv.innerText = '지문 등록을 진행합니다...';
 
       try {
-        const publicKeyCredentialCreationOptions = {
-          challenge: new Uint8Array(32),
-          rp: { name: "GitHub Pages Auth Demo" },
-          user: {
-            id: new Uint8Array(16),
-            name: "user@example.com",
-            displayName: "사용자"
-          },
-          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
-          authenticatorSelection: {
-            authenticatorAttachment: "platform",
-            userVerification: "required"
-          },
-          timeout: 60000
-        };
-
         const credential = await navigator.credentials.create({
-          publicKey: publicKeyCredentialCreationOptions
+          publicKey: {
+            challenge: new Uint8Array(32),
+            rp: { name: "GitHub Pages Auth" },
+            user: {
+              id: Uint8Array.from("user_id_123", c => c.charCodeAt(0)),
+              name: "user@example.com",
+              displayName: "사용자"
+            },
+            pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+            timeout: 60000
+          }
         });
 
         if (credential) {
-          statusDiv.style.color = '#16a34a';
-          statusDiv.innerText = '✅ 인증이 완료되었습니다!';
-          
-          // 설정한 피치/속도로 음성 재생
-          speakCustomTTS("인증이 완료되었습니다.");
+          // 생성된 Credential ID를 브라우저에 저장 (문자열 변환)
+          const credentialId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+          localStorage.setItem('registered_credential_id', credentialId);
+
+          statusDiv.style.color = '#059669';
+          statusDiv.innerText = '🎉 지문 등록 완료! 이제 [2. 지문 인증하기]를 눌러보세요.';
+          speak("지문 등록이 완료되었습니다.");
         }
       } catch (err) {
         console.error(err);
         statusDiv.style.color = '#dc2626';
-        statusDiv.innerText = '❌ 인증 실패 또는 취소되었습니다.';
+        statusDiv.innerText = '❌ 등록 실패 또는 취소되었습니다.';
       }
+    }
+
+    // 2. 등록된 지문으로 인증 (get)
+    async function authenticateBiometric() {
+      const savedId = localStorage.getItem('registered_credential_id');
+
+      // 등록된 지문 정보가 없는 경우
+      if (!savedId) {
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '⚠️ 먼저 [1. 지문 최초 등록하기]를 진행해 주세요.';
+        speak("먼저 지문을 등록해 주세요.");
+        return;
+      }
+
+      statusDiv.style.color = '#333';
+      statusDiv.innerText = '지문으로 인증하는 중...';
+
+      try {
+        // 저장된 ID를 Uint8Array 형태로 복원
+        const rawId = Uint8Array.from(atob(savedId), c => c.charCodeAt(0));
+
+        // 기존 등록된 키 기반 인증 요청
+        const assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge: new Uint8Array(32),
+            allowCredentials: [{
+              id: rawId,
+              type: 'public-key'
+            }],
+            userVerification: "required",
+            timeout: 60000
+          }
+        });
+
+        if (assertion) {
+          statusDiv.style.color = '#16a34a';
+          statusDiv.innerText = '✅ 인증이 완료되었습니다!';
+          
+          // 설정해 둔 TTS 음성 실행
+          speak("인증이 완료되었습니다.");
+        }
+      } catch (err) {
+        console.error(err);
+        statusDiv.style.color = '#dc2626';
+        statusDiv.innerText = '❌ 인증 실패 (등록되지 않은 손가락이거나 취소됨)';
+      }
+    }
+
+    // 3. 테스트용 등록 정보 초기화
+    function resetBiometric() {
+      localStorage.removeItem('registered_credential_id');
+      statusDiv.style.color = '#6b7280';
+      statusDiv.innerText = '등록 정보가 초기화되었습니다.';
     }
   </script>
 </body>
