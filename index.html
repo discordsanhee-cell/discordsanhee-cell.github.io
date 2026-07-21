@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>위젯 메인 대시보드</title>
 
-  <!-- 💡 [보안] 2차 인증 여부 확인 스크립트 -->
+  <!-- 💡 [보안] 2차 인증 여부 확인 -->
   <script>
     if (localStorage.getItem('2fa_passed') !== 'true') {
       alert('2차 인증이 필요합니다!');
-      location.href = 'gua.html'; // 인증창으로 튕겨냄
+      location.href = 'gua.html'; // 인증 안 되었으면 gua.html로 튕겨냄
     }
   </script>
 
   <style>
     body {
-      font-family: 'Segoe UI', sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin: 0;
       padding: 20px;
       background-color: #f3f4f6;
@@ -28,11 +28,12 @@
       padding: 15px 25px;
       border-radius: 12px;
       margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
     .widget-container {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-      gap: 20px;
+      gap: 25px;
     }
     .widget-card {
       background: white;
@@ -41,13 +42,16 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      height: 550px;
+      
+      /* 📐 요청사항: 세로 높이를 850px로 시원하게 늘림 */
+      height: 850px; 
     }
     .widget-title {
       background: #1f2937;
       color: white;
-      padding: 12px 20px;
+      padding: 14px 20px;
       font-weight: bold;
+      font-size: 16px;
       margin: 0;
     }
     iframe {
@@ -63,13 +67,17 @@
       border-radius: 8px;
       cursor: pointer;
       font-weight: bold;
+      transition: background 0.2s;
+    }
+    .btn-logout:hover {
+      background: #dc2626;
     }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <h2>🎉 위젯 대시보드 (보안 해제됨)</h2>
+    <h2>🎉 위젯 대시보드 (2차 인증 완료)</h2>
     <button class="btn-logout" onclick="logout()">잠금 / 로그아웃</button>
   </div>
 
@@ -89,8 +97,7 @@
 
   <script>
     function logout() {
-      // 인증 토큰 삭제 후 2차 인증창으로 리다이렉트
-      localStorage.removeItem('2fa_passed');
+      localStorage.removeItem('2fa_passed'); // 2차 인증 깃발 제거
       location.href = 'gua.html';
     }
   </script>
