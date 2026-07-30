@@ -46,7 +46,9 @@
             border-radius: 8px;
             cursor: pointer;
             color: white;
-            transition: background 0.2s, transform 0.1s;
+            transition: background 0.2s;
+            user-select: none; /* 꾹 누를 때 드래그 방지 */
+            -webkit-user-select: none;
         }
 
         #startStopBtn {
@@ -61,11 +63,6 @@
             background-color: #6c757d;
         }
 
-        /* 2초 동안 누를 때 시각적 효과 (선택사항) */
-        #resetBtn:active {
-            transform: scale(0.95);
-        }
-
         button:hover {
             opacity: 0.9;
         }
@@ -77,13 +74,13 @@
         <div class="display" id="display">00:00:00</div>
         <div class="buttons">
             <button id="startStopBtn" onclick="startStop()">시작</button>
-            <!-- 마우스를 누르고 떼는 동작 감지를 위해 mousedown/mouseup/mouseleave 이벤트 추가 -->
             <button id="resetBtn" 
                 onmousedown="startResetTimer()" 
                 onmouseup="cancelResetTimer()" 
                 onmouseleave="cancelResetTimer()"
                 ontouchstart="startResetTimer()" 
-                ontouchend="cancelResetTimer()">리셋</button>
+                ontouchend="cancelResetTimer()"
+                onclick="handleResetClick()">리셋</button>
         </div>
     </div>
 
@@ -92,7 +89,11 @@
         let elapsedTime = 0;
         let timerInterval = null;
         let isRunning = false;
-        let resetTimer = null; // 2초 꾹 누르기 타이머
+        
+        // 트릭 모드 관련 변수
+        let isTrickMode = false;
+        let resetTimer = null;
+        let longPressTriggered = false;
 
         function timeToString(time) {
             let diffInHrs = time / 3600000;
@@ -116,6 +117,7 @@
 
         function startStop() {
             if (!isRunning) {
+                // 시작
                 startTime = Date.now() - elapsedTime;
                 timerInterval = setInterval(function() {
                     elapsedTime = Date.now() - startTime;
@@ -126,29 +128,47 @@
                 document.getElementById("startStopBtn").classList.add("running");
                 isRunning = true;
             } else {
+                // 정지
                 clearInterval(timerInterval);
+                
+                // ★ 트릭 모드가 켜져 있다면, 정지하는 순간 밀리초를 .00으로 즉시 보정
+                if (isTrickMode) {
+                    elapsedTime = Math.floor(elapsedTime / 1000) * 1000;
+                    document.getElementById("display").innerHTML = timeToString(elapsedTime);
+                }
+
                 document.getElementById("startStopBtn").innerText = "시작";
                 document.getElementById("startStopBtn").classList.remove("running");
                 isRunning = false;
             }
         }
 
-        // 리셋 버튼을 누르기 시작했을 때 (정지 상태에서만 작동)
+        // 3초 꾹 누르기 감지 시작
         function startResetTimer() {
-            if (isRunning) return; // 작동 중에는 무시
-
-            // 2초(2000ms) 동안 누르고 있으면 실행
+            longPressTriggered = false;
             resetTimer = setTimeout(function() {
-                elapsedTime = 0;
-                document.getElementById("display").innerHTML = "00:00:00";
-            }, 2000);
+                // 3초 도달 시 트릭 모드 토글 (화면에 아무 표시 안 남)
+                isTrickMode = !isTrickMode;
+                longPressTriggered = true; 
+            }, 3000); // 3초 (3000ms)
         }
 
-        // 2초가 되기 전에 손을 떼거나 마우스가 벗어났을 때 취소
+        // 손을 뗌/영역 벗어남 처리
         function cancelResetTimer() {
             if (resetTimer) {
                 clearTimeout(resetTimer);
                 resetTimer = null;
+            }
+        }
+
+        // 일반 클릭 처리 (3초 롱프레스가 아닐 때만 일반 리셋 작동)
+        function handleResetClick() {
+            if (longPressTriggered) return; // 3초 누른 후 뗐을 때는 리셋 안 되게 차단
+
+            if (!isRunning) {
+                startTime = 0;
+                elapsedTime = 0;
+                document.getElementById("display").innerHTML = "00:00:00";
             }
         }
     </script>
