@@ -47,7 +47,7 @@
             cursor: pointer;
             color: white;
             transition: background 0.2s;
-            user-select: none; /* 꾹 누를 때 드래그 방지 */
+            user-select: none;
             -webkit-user-select: none;
         }
 
@@ -90,7 +90,6 @@
         let timerInterval = null;
         let isRunning = false;
         
-        // 트릭 모드 관련 변수
         let isTrickMode = false;
         let resetTimer = null;
         let longPressTriggered = false;
@@ -131,9 +130,19 @@
                 // 정지
                 clearInterval(timerInterval);
                 
-                // ★ 트릭 모드가 켜져 있다면, 정지하는 순간 밀리초를 .00으로 즉시 보정
+                // ★ 트릭 모드 작동 시 50초 기준 반올림 처리
                 if (isTrickMode) {
-                    elapsedTime = Math.floor(elapsedTime / 1000) * 1000;
+                    let totalSeconds = elapsedTime / 1000; // 전체 시간을 초 단위로 변환
+                    let currentSeconds = totalSeconds % 60; // 현재 '초' 부분만 추출
+
+                    if (currentSeconds >= 50) {
+                        // 50초 이상이면 다음 분의 00초로 올려줌
+                        elapsedTime = (Math.floor(totalSeconds / 60) + 1) * 60 * 1000;
+                    } else {
+                        // 50초 미만이면 현재 분의 00초로 내려줌
+                        elapsedTime = Math.floor(totalSeconds / 60) * 60 * 1000;
+                    }
+
                     document.getElementById("display").innerHTML = timeToString(elapsedTime);
                 }
 
@@ -143,17 +152,15 @@
             }
         }
 
-        // 3초 꾹 누르기 감지 시작
+        // 3초 꾹 누르기 감지 (트릭 모드 토글)
         function startResetTimer() {
             longPressTriggered = false;
             resetTimer = setTimeout(function() {
-                // 3초 도달 시 트릭 모드 토글 (화면에 아무 표시 안 남)
                 isTrickMode = !isTrickMode;
                 longPressTriggered = true; 
-            }, 3000); // 3초 (3000ms)
+            }, 3000);
         }
 
-        // 손을 뗌/영역 벗어남 처리
         function cancelResetTimer() {
             if (resetTimer) {
                 clearTimeout(resetTimer);
@@ -161,9 +168,8 @@
             }
         }
 
-        // 일반 클릭 처리 (3초 롱프레스가 아닐 때만 일반 리셋 작동)
         function handleResetClick() {
-            if (longPressTriggered) return; // 3초 누른 후 뗐을 때는 리셋 안 되게 차단
+            if (longPressTriggered) return;
 
             if (!isRunning) {
                 startTime = 0;
