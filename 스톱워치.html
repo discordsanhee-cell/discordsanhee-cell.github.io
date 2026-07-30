@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스톱워치</title>
+    <title>스톱워치 & 3D 플레이어</title>
     <!-- Three.js 3D 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -32,9 +32,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        .dev-btn:hover {
-            opacity: 0.85;
-        }
+        .dev-btn:hover { opacity: 0.85; }
 
         .stopwatch-container {
             background: white;
@@ -73,28 +71,11 @@
             -webkit-user-select: none;
         }
 
-        #startStopBtn {
-            background-color: #28a745;
-        }
-
-        #startStopBtn.running {
-            background-color: #dc3545;
-        }
-
-        #resetBtn {
-            background-color: #6c757d;
-        }
-
-        .music-toggle-btn {
-            background-color: #17a2b8;
-            font-size: 14px;
-            padding: 8px 16px;
-            width: 100%;
-        }
-
-        button:hover {
-            opacity: 0.9;
-        }
+        #startStopBtn { background-color: #28a745; }
+        #startStopBtn.running { background-color: #dc3545; }
+        #resetBtn { background-color: #6c757d; }
+        .music-toggle-btn { background-color: #17a2b8; font-size: 14px; padding: 8px 16px; width: 100%; }
+        button:hover { opacity: 0.9; }
 
         /* 음악 플레이어 영역 */
         .music-section {
@@ -114,10 +95,10 @@
         #cdCanvas {
             width: 280px;
             height: 180px;
-            background: #111;
+            background: #0a0a0a; /* CD가 잘 보이게 배경을 더 어둡게 */
             border-radius: 10px;
             margin-bottom: 15px;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.9);
         }
 
         .input-group {
@@ -136,9 +117,7 @@
             outline: none;
         }
 
-        .url-input:focus {
-            border-color: #17a2b8;
-        }
+        .url-input:focus { border-color: #17a2b8; }
 
         .controls-group {
             display: flex;
@@ -197,7 +176,7 @@
     </div>
 
     <script>
-        // --- 스톱워치 로직 ---
+        // --- 스톱워치 로직 (기존과 동일) ---
         let startTime = 0;
         let elapsedTime = 0;
         let timerInterval = null;
@@ -213,13 +192,10 @@
             let ss = Math.floor(diffInSec);
             let diffInMs = (diffInSec - ss) * 100;
             let ms = Math.floor(diffInMs);
-
             return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}:${ms.toString().padStart(2, "0")}`;
         }
 
-        function toggleTrickMode() {
-            isTrickMode = !isTrickMode;
-        }
+        function toggleTrickMode() { isTrickMode = !isTrickMode; }
 
         function startStop() {
             if (!isRunning) {
@@ -278,7 +254,6 @@
         }
 
         function onPlayerStateChange(event) {
-            // CD가 삽입되어 있을 때만 회전시킴
             if (event.data === YT.PlayerState.PLAYING && isInserted) {
                 isSpinning = true;
             } else {
@@ -292,12 +267,12 @@
             return (match && match[2].length === 11) ? match[2] : null;
         }
 
-        // --- Three.js 3D CD 플레이어 로직 ---
+        // --- 사실적인 Three.js 3D CD 플레이어 로직 ---
         let scene, camera, renderer, cdMesh, slotMesh;
         let threeInitialized = false;
         let isSpinning = false;
         let isInserted = false;
-        let targetCdY = 1.8; // 기본 상단 꺼내진 위치
+        let targetCdY = 1.8; 
 
         function init3DCDPlayer() {
             threeInitialized = true;
@@ -311,33 +286,71 @@
             renderer.setSize(container.clientWidth, container.clientHeight);
             container.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            // 1. 다중 조명 세팅 (은색 메탈 표면에 무지개빛 반사를 만들기 위함)
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(3, 5, 4);
-            scene.add(dirLight);
+            
+            const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            mainLight.position.set(2, 5, 3);
+            scene.add(mainLight);
 
-            // 3D CD
-            const cdGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.02, 64);
-            const cdMaterial = new THREE.MeshStandardMaterial({
-                color: 0x111111,
-                metalness: 0.9,
-                roughness: 0.2,
+            const cyanLight = new THREE.PointLight(0x00ffff, 0.5, 10);
+            cyanLight.position.set(-2, 2, 2);
+            scene.add(cyanLight);
+
+            const magentaLight = new THREE.PointLight(0xff00ff, 0.5, 10);
+            magentaLight.position.set(2, -2, 2);
+            scene.add(magentaLight);
+
+            // 2. 사실적인 CD 만들기 (그룹화)
+            cdMesh = new THREE.Group();
+
+            // 2-1. CD 바깥쪽 데이터 기록면 (반짝이는 은색)
+            const discGeo = new THREE.RingGeometry(0.35, 1.2, 64);
+            const discMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                metalness: 1.0,  // 완전한 금속 질감
+                roughness: 0.15, // 매끄러운 표면
+                side: THREE.DoubleSide
             });
-            cdMesh = new THREE.Mesh(cdGeometry, cdMaterial);
-            cdMesh.rotation.x = Math.PI / 3;
+            const discMesh = new THREE.Mesh(discGeo, discMat);
+            cdMesh.add(discMesh);
+
+            // 2-2. CD 안쪽 투명 플라스틱 링
+            const ringGeo = new THREE.RingGeometry(0.15, 0.35, 64);
+            const ringMat = new THREE.MeshStandardMaterial({
+                color: 0xcccccc,
+                metalness: 0.3,
+                roughness: 0.2,
+                transparent: true,
+                opacity: 0.4, // 투명하게 설정
+                side: THREE.DoubleSide
+            });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            cdMesh.add(ringMesh);
+
+            // (가장 안쪽 0 ~ 0.15 구간은 지오메트리를 생성하지 않아 완전히 뚫린 빈 공간이 됨)
+
+            // CD 눕히기 (RingGeometry는 기본적으로 세워져 생성되므로 X축으로 회전)
+            cdMesh.rotation.x = -Math.PI / 3;
             cdMesh.position.y = 1.8;
             scene.add(cdMesh);
 
-            const holeGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.03, 32);
-            const holeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-            const hole = new THREE.Mesh(holeGeo, holeMat);
-            cdMesh.add(hole);
+            // 3. 3D 플레이어 입구 (슬롯)
+            slotMesh = new THREE.Group();
+            
+            // 플레이어 본체
+            const bodyGeo = new THREE.BoxGeometry(3.0, 0.5, 0.8);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6, roughness: 0.5 });
+            const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+            slotMesh.add(bodyMesh);
 
-            // 3D CD 슬롯 (플레이어 입구)
-            const slotGeo = new THREE.BoxGeometry(2.8, 0.15, 0.4);
-            const slotMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5 });
-            slotMesh = new THREE.Mesh(slotGeo, slotMat);
+            // CD가 들어가는 틈새(검은색)
+            const holeGeo = new THREE.BoxGeometry(2.6, 0.05, 0.81);
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const slotHole = new THREE.Mesh(holeGeo, holeMat);
+            slotMesh.add(slotHole);
+
             slotMesh.position.set(0, -0.6, 0);
             scene.add(slotMesh);
 
@@ -347,12 +360,13 @@
         function animate3D() {
             requestAnimationFrame(animate3D);
 
-            // CD 이동 위치 보정 (부드럽게 위아래 이동)
+            // CD 상하 이동 (스르륵 들어가는 애니메이션)
             cdMesh.position.y += (targetCdY - cdMesh.position.y) * 0.1;
 
             // 삽입 상태에서 재생 중일 때만 CD 3D 회전
             if (isSpinning && isInserted) {
-                cdMesh.rotation.y += 0.08;
+                // RingGeometry 기반이므로 Z축을 돌려야 턴테이블처럼 돕니다
+                cdMesh.rotation.z -= 0.08; 
             }
 
             renderer.render(scene, camera);
@@ -396,16 +410,14 @@
 
         // ⏏ 꺼내기 기능
         function ejectCD() {
-            // 1. 회전 및 재생 즉시 중단
             isSpinning = false;
             isInserted = false;
             
             if (ytPlayer && ytPlayer.stopVideo) {
-                ytPlayer.stopVideo(); // 유튜브 음원 완전 정지
+                ytPlayer.stopVideo(); 
             }
 
-            // 2. CD를 슬롯 입구 위쪽으로 쓱 올려 빼냄
-            targetCdY = 1.8;
+            targetCdY = 1.8; // CD 배출
         }
     </script>
 
