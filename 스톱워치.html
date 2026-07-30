@@ -130,17 +130,17 @@
                 // 정지
                 clearInterval(timerInterval);
                 
-                // ★ 트릭 모드 작동 시 50초 기준 반올림 처리
+                // ★ 트릭 모드 작동 시: 밀리초가 80(0.8초) 이상이면 다음 초로 올림
                 if (isTrickMode) {
-                    let totalSeconds = elapsedTime / 1000; // 전체 시간을 초 단위로 변환
-                    let currentSeconds = totalSeconds % 60; // 현재 '초' 부분만 추출
+                    let seconds = Math.floor(elapsedTime / 1000); // 현재 초
+                    let milliseconds = elapsedTime % 1000;        // 현재 밀리초 (0~999)
 
-                    if (currentSeconds >= 50) {
-                        // 50초 이상이면 다음 분의 00초로 올려줌
-                        elapsedTime = (Math.floor(totalSeconds / 60) + 1) * 60 * 1000;
+                    if (milliseconds >= 800) { 
+                        // .80초(800ms) 이상이면 1초 올리고 밀리초는 00으로
+                        elapsedTime = (seconds + 1) * 1000;
                     } else {
-                        // 50초 미만이면 현재 분의 00초로 내려줌
-                        elapsedTime = Math.floor(totalSeconds / 60) * 60 * 1000;
+                        // .80초 미만이면 밀리초만 버려서 00으로
+                        elapsedTime = seconds * 1000;
                     }
 
                     document.getElementById("display").innerHTML = timeToString(elapsedTime);
@@ -152,7 +152,7 @@
             }
         }
 
-        // 3초 꾹 누르기 감지 (트릭 모드 토글)
+        // 리셋 버튼 3초 꾹 누르기 (티 안 나게 트릭 모드 온/오프)
         function startResetTimer() {
             longPressTriggered = false;
             resetTimer = setTimeout(function() {
