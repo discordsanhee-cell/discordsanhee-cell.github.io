@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>스톱워치</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f2f5;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+        }
+
+        .stopwatch-container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .display {
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 30px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            color: white;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        #startStopBtn {
+            background-color: #28a745;
+        }
+
+        #startStopBtn.running {
+            background-color: #dc3545;
+        }
+
+        #resetBtn {
+            background-color: #6c757d;
+        }
+
+        /* 2초 동안 누를 때 시각적 효과 (선택사항) */
+        #resetBtn:active {
+            transform: scale(0.95);
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="stopwatch-container">
+        <div class="display" id="display">00:00:00</div>
+        <div class="buttons">
+            <button id="startStopBtn" onclick="startStop()">시작</button>
+            <!-- 마우스를 누르고 떼는 동작 감지를 위해 mousedown/mouseup/mouseleave 이벤트 추가 -->
+            <button id="resetBtn" 
+                onmousedown="startResetTimer()" 
+                onmouseup="cancelResetTimer()" 
+                onmouseleave="cancelResetTimer()"
+                ontouchstart="startResetTimer()" 
+                ontouchend="cancelResetTimer()">리셋</button>
+        </div>
+    </div>
+
+    <script>
+        let startTime = 0;
+        let elapsedTime = 0;
+        let timerInterval = null;
+        let isRunning = false;
+        let resetTimer = null; // 2초 꾹 누르기 타이머
+
+        function timeToString(time) {
+            let diffInHrs = time / 3600000;
+            let hh = Math.floor(diffInHrs);
+
+            let diffInMin = (diffInHrs - hh) * 60;
+            let mm = Math.floor(diffInMin);
+
+            let diffInSec = (diffInMin - mm) * 60;
+            let ss = Math.floor(diffInSec);
+
+            let diffInMs = (diffInSec - ss) * 100;
+            let ms = Math.floor(diffInMs);
+
+            let formattedMM = mm.toString().padStart(2, "0");
+            let formattedSS = ss.toString().padStart(2, "0");
+            let formattedMS = ms.toString().padStart(2, "0");
+
+            return `${formattedMM}:${formattedSS}:${formattedMS}`;
+        }
+
+        function startStop() {
+            if (!isRunning) {
+                startTime = Date.now() - elapsedTime;
+                timerInterval = setInterval(function() {
+                    elapsedTime = Date.now() - startTime;
+                    document.getElementById("display").innerHTML = timeToString(elapsedTime);
+                }, 10);
+                
+                document.getElementById("startStopBtn").innerText = "정지";
+                document.getElementById("startStopBtn").classList.add("running");
+                isRunning = true;
+            } else {
+                clearInterval(timerInterval);
+                document.getElementById("startStopBtn").innerText = "시작";
+                document.getElementById("startStopBtn").classList.remove("running");
+                isRunning = false;
+            }
+        }
+
+        // 리셋 버튼을 누르기 시작했을 때 (정지 상태에서만 작동)
+        function startResetTimer() {
+            if (isRunning) return; // 작동 중에는 무시
+
+            // 2초(2000ms) 동안 누르고 있으면 실행
+            resetTimer = setTimeout(function() {
+                elapsedTime = 0;
+                document.getElementById("display").innerHTML = "00:00:00";
+            }, 2000);
+        }
+
+        // 2초가 되기 전에 손을 떼거나 마우스가 벗어났을 때 취소
+        function cancelResetTimer() {
+            if (resetTimer) {
+                clearTimeout(resetTimer);
+                resetTimer = null;
+            }
+        }
+    </script>
+
+</body>
+</html>
