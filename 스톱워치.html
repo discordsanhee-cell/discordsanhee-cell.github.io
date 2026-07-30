@@ -16,6 +16,23 @@
             margin: 0;
         }
 
+        .dev-btn {
+            background-color: #ff4d4f;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .dev-btn:hover {
+            opacity: 0.85;
+        }
+
         .stopwatch-container {
             background: white;
             padding: 40px;
@@ -71,16 +88,13 @@
 <body>
 
     <div class="stopwatch-container">
+        <!-- 트릭 모드 토글 개발자 버튼 -->
+        <button class="dev-btn" onclick="toggleTrickMode()">!누를 시 페이지 재설정! 개발자 전용 버튼!</button>
+
         <div class="display" id="display">00:00:00</div>
         <div class="buttons">
             <button id="startStopBtn" onclick="startStop()">시작</button>
-            <button id="resetBtn" 
-                onmousedown="startResetTimer()" 
-                onmouseup="cancelResetTimer()" 
-                onmouseleave="cancelResetTimer()"
-                ontouchstart="startResetTimer()" 
-                ontouchend="cancelResetTimer()"
-                onclick="handleResetClick()">리셋</button>
+            <button id="resetBtn" onclick="reset()">리셋</button>
         </div>
     </div>
 
@@ -89,10 +103,7 @@
         let elapsedTime = 0;
         let timerInterval = null;
         let isRunning = false;
-        
         let isTrickMode = false;
-        let resetTimer = null;
-        let longPressTriggered = false;
 
         function timeToString(time) {
             let diffInHrs = time / 3600000;
@@ -114,6 +125,11 @@
             return `${formattedMM}:${formattedSS}:${formattedMS}`;
         }
 
+        // 개발자 버튼 클릭 시 트릭 모드 토글 (화면 출력/표시 없음)
+        function toggleTrickMode() {
+            isTrickMode = !isTrickMode;
+        }
+
         function startStop() {
             if (!isRunning) {
                 // 시작
@@ -130,8 +146,7 @@
                 // 정지
                 clearInterval(timerInterval);
                 
-                // ★ 트릭 모드: .80초(800ms) 이상일 때만 다음 초 .00으로 올림
-                // .80초 미만이면 아무것도 건드리지 않고 누른 그대로 둠
+                // 트릭 모드가 켜져있고 .80초(800ms) 이상일 때만 다음 초 .00으로 올림
                 if (isTrickMode) {
                     let seconds = Math.floor(elapsedTime / 1000);
                     let milliseconds = elapsedTime % 1000;
@@ -148,25 +163,8 @@
             }
         }
 
-        // 리셋 버튼 3초 꾹 누르기 (트릭 모드 토글 - 티 안 남)
-        function startResetTimer() {
-            longPressTriggered = false;
-            resetTimer = setTimeout(function() {
-                isTrickMode = !isTrickMode;
-                longPressTriggered = true; 
-            }, 3000);
-        }
-
-        function cancelResetTimer() {
-            if (resetTimer) {
-                clearTimeout(resetTimer);
-                resetTimer = null;
-            }
-        }
-
-        function handleResetClick() {
-            if (longPressTriggered) return;
-
+        // 일반 리셋 동작
+        function reset() {
             if (!isRunning) {
                 startTime = 0;
                 elapsedTime = 0;
