@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>스톱워치</title>
+    <!-- Three.js 3D 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
             display: flex;
@@ -108,56 +110,21 @@
             display: flex;
         }
 
-        /* CD 애니메이션 (썸네일 없이 깔끔한 심플 디자인) */
-        .cd-player {
-            width: 120px;
-            height: 120px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #222 0%, #444 50%, #222 100%);
-            border: 4px solid #ddd;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        /* 3D 캔버스 영역 */
+        #cdCanvas {
+            width: 280px;
+            height: 180px;
+            background: #111;
+            border-radius: 10px;
             margin-bottom: 15px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
         }
 
-        /* CD 홀로그램 무늬 레코드 라인 */
-        .cd-player::before {
-            content: '';
-            position: absolute;
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-        }
-
-        /* CD 중앙 구멍 */
-        .cd-center {
-            width: 30px;
-            height: 30px;
-            background-color: #f0f2f5;
-            border-radius: 50%;
-            border: 3px solid #bbb;
-            z-index: 2;
-        }
-
-        /* CD 회전 애니메이션 */
-        .cd-player.spinning {
-            animation: spin 3s linear infinite;
-        }
-
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
-
-        /* 유튜브 URL 입력 폼 */
         .input-group {
             display: flex;
             gap: 5px;
             width: 100%;
+            margin-bottom: 10px;
         }
 
         .url-input {
@@ -173,13 +140,20 @@
             border-color: #17a2b8;
         }
 
-        .play-btn {
-            background-color: #333;
-            padding: 8px 12px;
-            font-size: 13px;
+        .controls-group {
+            display: flex;
+            gap: 8px;
+            width: 100%;
         }
 
-        /* Hidden YouTube Iframe */
+        .control-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 13px;
+            border-radius: 6px;
+            background-color: #333;
+        }
+
         #youtube-player-container {
             display: none;
         }
@@ -188,7 +162,7 @@
 <body>
 
     <div class="stopwatch-container">
-        <!-- 트릭 모드 토글 개발자 버튼 -->
+        <!-- 개발자 비밀 버튼 -->
         <button class="dev-btn" onclick="toggleTrickMode()">!누를 시 페이지 재설정! 개발자 전용 버튼!</button>
 
         <div class="display" id="display">00:00:00</div>
@@ -200,80 +174,47 @@
         <!-- 음악 토글 버튼 -->
         <button class="music-toggle-btn" onclick="toggleMusicSection()">(음악)</button>
 
-        <!-- 음악 재생 섹션 -->
+        <!-- 3D 음악 재생 섹션 -->
         <div class="music-section" id="musicSection">
-            <!-- 썸네일 없는 심플 CD -->
-            <div class="cd-player" id="cdPlayer">
-                <div class="cd-center"></div>
-            </div>
+            <!-- Three.js 3D CD 캔버스 -->
+            <div id="cdCanvas"></div>
 
             <div class="input-group">
                 <input type="text" id="ytUrlInput" class="url-input" placeholder="유튜브 음악 링크 입력...">
-                <button class="play-btn" onclick="loadAndPlayYouTube()">재생</button>
+                <button class="control-btn" onclick="insertCDAndPlay()">CD 꽂기</button>
+            </div>
+
+            <div class="controls-group">
+                <button class="control-btn" style="background-color: #28a745;" onclick="playMusic()">▶ 재생</button>
+                <button class="control-btn" style="background-color: #dc3545;" onclick="pauseMusic()">❚❚ 정지</button>
+                <button class="control-btn" style="background-color: #6c757d;" onclick="ejectCD()">⏏ 꺼내기</button>
             </div>
         </div>
     </div>
 
-    <!-- 숨겨진 유튜브 플레이어 -->
     <div id="youtube-player-container">
         <div id="player"></div>
     </div>
 
     <script>
-        // 스톱워치 관련 변수
+        // --- 스톱워치 로직 ---
         let startTime = 0;
         let elapsedTime = 0;
         let timerInterval = null;
         let isRunning = false;
         let isTrickMode = false;
 
-        // 유튜브 플레이어 변수
-        let ytPlayer = null;
-
-        // IFrame API 준비
-        var tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        var firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-
-        function onYouTubeIframeAPIReady() {
-            ytPlayer = new YT.Player('player', {
-                height: '0',
-                width: '0',
-                events: {
-                    'onStateChange': onPlayerStateChange
-                }
-            });
-        }
-
-        function onPlayerStateChange(event) {
-            const cdPlayer = document.getElementById("cdPlayer");
-            // 재생 중일 때만 CD 회전
-            if (event.data === YT.PlayerState.PLAYING) {
-                cdPlayer.classList.add("spinning");
-            } else {
-                cdPlayer.classList.remove("spinning");
-            }
-        }
-
         function timeToString(time) {
             let diffInHrs = time / 3600000;
             let hh = Math.floor(diffInHrs);
-
             let diffInMin = (diffInHrs - hh) * 60;
             let mm = Math.floor(diffInMin);
-
             let diffInSec = (diffInMin - mm) * 60;
             let ss = Math.floor(diffInSec);
-
             let diffInMs = (diffInSec - ss) * 100;
             let ms = Math.floor(diffInMs);
 
-            let formattedMM = mm.toString().padStart(2, "0");
-            let formattedSS = ss.toString().padStart(2, "0");
-            let formattedMS = ms.toString().padStart(2, "0");
-
-            return `${formattedMM}:${formattedSS}:${formattedMS}`;
+            return `${mm.toString().padStart(2, "0")}:${ss.toString().padStart(2, "0")}:${ms.toString().padStart(2, "0")}`;
         }
 
         function toggleTrickMode() {
@@ -287,23 +228,19 @@
                     elapsedTime = Date.now() - startTime;
                     document.getElementById("display").innerHTML = timeToString(elapsedTime);
                 }, 10);
-                
                 document.getElementById("startStopBtn").innerText = "정지";
                 document.getElementById("startStopBtn").classList.add("running");
                 isRunning = true;
             } else {
                 clearInterval(timerInterval);
-                
                 if (isTrickMode) {
                     let seconds = Math.floor(elapsedTime / 1000);
                     let milliseconds = elapsedTime % 1000;
-
                     if (milliseconds >= 800) { 
                         elapsedTime = (seconds + 1) * 1000;
                         document.getElementById("display").innerHTML = timeToString(elapsedTime);
                     }
                 }
-
                 document.getElementById("startStopBtn").innerText = "시작";
                 document.getElementById("startStopBtn").classList.remove("running");
                 isRunning = false;
@@ -318,21 +255,111 @@
             }
         }
 
-        // 음악 섹션 토글
         function toggleMusicSection() {
             const musicSection = document.getElementById("musicSection");
             musicSection.classList.toggle("active");
+            if (musicSection.classList.contains("active") && !threeInitialized) {
+                init3DCDPlayer();
+            }
         }
 
-        // 유튜브 링크에서 비디오 ID 추출
+        // --- 유튜브 플레이어 API ---
+        let ytPlayer = null;
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('player', {
+                height: '0', width: '0',
+                events: { 'onStateChange': onPlayerStateChange }
+            });
+        }
+
+        function onPlayerStateChange(event) {
+            // CD가 삽입되어 있을 때만 회전시킴
+            if (event.data === YT.PlayerState.PLAYING && isInserted) {
+                isSpinning = true;
+            } else {
+                isSpinning = false;
+            }
+        }
+
         function extractVideoId(url) {
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             const match = url.match(regExp);
             return (match && match[2].length === 11) ? match[2] : null;
         }
 
-        // 유튜브 음원 재생 함수
-        function loadAndPlayYouTube() {
+        // --- Three.js 3D CD 플레이어 로직 ---
+        let scene, camera, renderer, cdMesh, slotMesh;
+        let threeInitialized = false;
+        let isSpinning = false;
+        let isInserted = false;
+        let targetCdY = 1.8; // 기본 상단 꺼내진 위치
+
+        function init3DCDPlayer() {
+            threeInitialized = true;
+            const container = document.getElementById('cdCanvas');
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 0, 5);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(3, 5, 4);
+            scene.add(dirLight);
+
+            // 3D CD
+            const cdGeometry = new THREE.CylinderGeometry(1.2, 1.2, 0.02, 64);
+            const cdMaterial = new THREE.MeshStandardMaterial({
+                color: 0x111111,
+                metalness: 0.9,
+                roughness: 0.2,
+            });
+            cdMesh = new THREE.Mesh(cdGeometry, cdMaterial);
+            cdMesh.rotation.x = Math.PI / 3;
+            cdMesh.position.y = 1.8;
+            scene.add(cdMesh);
+
+            const holeGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.03, 32);
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+            const hole = new THREE.Mesh(holeGeo, holeMat);
+            cdMesh.add(hole);
+
+            // 3D CD 슬롯 (플레이어 입구)
+            const slotGeo = new THREE.BoxGeometry(2.8, 0.15, 0.4);
+            const slotMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.5 });
+            slotMesh = new THREE.Mesh(slotGeo, slotMat);
+            slotMesh.position.set(0, -0.6, 0);
+            scene.add(slotMesh);
+
+            animate3D();
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+
+            // CD 이동 위치 보정 (부드럽게 위아래 이동)
+            cdMesh.position.y += (targetCdY - cdMesh.position.y) * 0.1;
+
+            // 삽입 상태에서 재생 중일 때만 CD 3D 회전
+            if (isSpinning && isInserted) {
+                cdMesh.rotation.y += 0.08;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // CD 꽂기 동작
+        function insertCDAndPlay() {
             const urlInput = document.getElementById("ytUrlInput").value;
             const videoId = extractVideoId(urlInput);
 
@@ -341,9 +368,44 @@
                 return;
             }
 
+            targetCdY = -0.55; // 슬롯 안으로 쏙 들어감
+            isInserted = true;
+
             if (ytPlayer && ytPlayer.loadVideoById) {
                 ytPlayer.loadVideoById(videoId);
             }
+        }
+
+        // ▶ 재생 동작
+        function playMusic() {
+            if (!isInserted) {
+                alert("먼저 CD를 꽂아주세요!");
+                return;
+            }
+            if (ytPlayer && ytPlayer.playVideo) {
+                ytPlayer.playVideo();
+            }
+        }
+
+        // ❚❚ 정지 동작
+        function pauseMusic() {
+            if (ytPlayer && ytPlayer.pauseVideo) {
+                ytPlayer.pauseVideo();
+            }
+        }
+
+        // ⏏ 꺼내기 기능
+        function ejectCD() {
+            // 1. 회전 및 재생 즉시 중단
+            isSpinning = false;
+            isInserted = false;
+            
+            if (ytPlayer && ytPlayer.stopVideo) {
+                ytPlayer.stopVideo(); // 유튜브 음원 완전 정지
+            }
+
+            // 2. CD를 슬롯 입구 위쪽으로 쓱 올려 빼냄
+            targetCdY = 1.8;
         }
     </script>
 
