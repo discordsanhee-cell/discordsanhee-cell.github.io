@@ -10,10 +10,11 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             background-color: #f0f2f5;
             font-family: 'Arial', sans-serif;
             margin: 0;
+            padding: 20px 0;
         }
 
         .dev-btn {
@@ -39,6 +40,7 @@
             border-radius: 15px;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             text-align: center;
+            width: 320px;
         }
 
         .display {
@@ -53,6 +55,7 @@
             display: flex;
             gap: 10px;
             justify-content: center;
+            margin-bottom: 20px;
         }
 
         button {
@@ -80,8 +83,105 @@
             background-color: #6c757d;
         }
 
+        .music-toggle-btn {
+            background-color: #17a2b8;
+            font-size: 14px;
+            padding: 8px 16px;
+            width: 100%;
+        }
+
         button:hover {
             opacity: 0.9;
+        }
+
+        /* 음악 플레이어 영역 */
+        .music-section {
+            display: none;
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px dashed #ccc;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .music-section.active {
+            display: flex;
+        }
+
+        /* CD 애니메이션 (썸네일 없이 깔끔한 심플 디자인) */
+        .cd-player {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #222 0%, #444 50%, #222 100%);
+            border: 4px solid #ddd;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        /* CD 홀로그램 무늬 레코드 라인 */
+        .cd-player::before {
+            content: '';
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        /* CD 중앙 구멍 */
+        .cd-center {
+            width: 30px;
+            height: 30px;
+            background-color: #f0f2f5;
+            border-radius: 50%;
+            border: 3px solid #bbb;
+            z-index: 2;
+        }
+
+        /* CD 회전 애니메이션 */
+        .cd-player.spinning {
+            animation: spin 3s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 유튜브 URL 입력 폼 */
+        .input-group {
+            display: flex;
+            gap: 5px;
+            width: 100%;
+        }
+
+        .url-input {
+            flex: 1;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .url-input:focus {
+            border-color: #17a2b8;
+        }
+
+        .play-btn {
+            background-color: #333;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        /* Hidden YouTube Iframe */
+        #youtube-player-container {
+            display: none;
         }
     </style>
 </head>
@@ -96,14 +196,65 @@
             <button id="startStopBtn" onclick="startStop()">시작</button>
             <button id="resetBtn" onclick="reset()">리셋</button>
         </div>
+
+        <!-- 음악 토글 버튼 -->
+        <button class="music-toggle-btn" onclick="toggleMusicSection()">(음악)</button>
+
+        <!-- 음악 재생 섹션 -->
+        <div class="music-section" id="musicSection">
+            <!-- 썸네일 없는 심플 CD -->
+            <div class="cd-player" id="cdPlayer">
+                <div class="cd-center"></div>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="ytUrlInput" class="url-input" placeholder="유튜브 음악 링크 입력...">
+                <button class="play-btn" onclick="loadAndPlayYouTube()">재생</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 숨겨진 유튜브 플레이어 -->
+    <div id="youtube-player-container">
+        <div id="player"></div>
     </div>
 
     <script>
+        // 스톱워치 관련 변수
         let startTime = 0;
         let elapsedTime = 0;
         let timerInterval = null;
         let isRunning = false;
         let isTrickMode = false;
+
+        // 유튜브 플레이어 변수
+        let ytPlayer = null;
+
+        // IFrame API 준비
+        var tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            ytPlayer = new YT.Player('player', {
+                height: '0',
+                width: '0',
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerStateChange(event) {
+            const cdPlayer = document.getElementById("cdPlayer");
+            // 재생 중일 때만 CD 회전
+            if (event.data === YT.PlayerState.PLAYING) {
+                cdPlayer.classList.add("spinning");
+            } else {
+                cdPlayer.classList.remove("spinning");
+            }
+        }
 
         function timeToString(time) {
             let diffInHrs = time / 3600000;
@@ -125,14 +276,12 @@
             return `${formattedMM}:${formattedSS}:${formattedMS}`;
         }
 
-        // 개발자 버튼 클릭 시 트릭 모드 토글 (화면 출력/표시 없음)
         function toggleTrickMode() {
             isTrickMode = !isTrickMode;
         }
 
         function startStop() {
             if (!isRunning) {
-                // 시작
                 startTime = Date.now() - elapsedTime;
                 timerInterval = setInterval(function() {
                     elapsedTime = Date.now() - startTime;
@@ -143,10 +292,8 @@
                 document.getElementById("startStopBtn").classList.add("running");
                 isRunning = true;
             } else {
-                // 정지
                 clearInterval(timerInterval);
                 
-                // 트릭 모드가 켜져있고 .80초(800ms) 이상일 때만 다음 초 .00으로 올림
                 if (isTrickMode) {
                     let seconds = Math.floor(elapsedTime / 1000);
                     let milliseconds = elapsedTime % 1000;
@@ -163,12 +310,39 @@
             }
         }
 
-        // 일반 리셋 동작
         function reset() {
             if (!isRunning) {
                 startTime = 0;
                 elapsedTime = 0;
                 document.getElementById("display").innerHTML = "00:00:00";
+            }
+        }
+
+        // 음악 섹션 토글
+        function toggleMusicSection() {
+            const musicSection = document.getElementById("musicSection");
+            musicSection.classList.toggle("active");
+        }
+
+        // 유튜브 링크에서 비디오 ID 추출
+        function extractVideoId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        // 유튜브 음원 재생 함수
+        function loadAndPlayYouTube() {
+            const urlInput = document.getElementById("ytUrlInput").value;
+            const videoId = extractVideoId(urlInput);
+
+            if (!videoId) {
+                alert("올바른 유튜브 링크를 입력해 주세요.");
+                return;
+            }
+
+            if (ytPlayer && ytPlayer.loadVideoById) {
+                ytPlayer.loadVideoById(videoId);
             }
         }
     </script>
